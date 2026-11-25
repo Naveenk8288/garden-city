@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Garden City Underworld — Bengaluru</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Kannada:wght@400;600;700&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="game-root">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Title / Loading Screen -->
+      <div id="title-screen" class="overlay-screen">
+        <div class="title-backdrop"></div>
+        <div class="title-content">
+          <div class="title-kicker">ಬೆಂಗಳೂರು ಭೂಗತ ಲೋಕ • BENGALURU OPEN WORLD</div>
+          <h1 class="game-title">GARDEN CITY<br /><span>UNDERWORLD</span></h1>
+          <p class="title-subtitle">
+            Rise from the monsoon alleys of Old Bengaluru to rule the Silicon Plateau.
+            Real OpenStreetMap streets, Namma Metro transit, fictional crews & turf warfare.
+          </p>
+          <div id="loading-status" class="loading-box">
+            <div class="loading-bar-track"><div id="loading-bar-fill"></div></div>
+            <div id="loading-text">Initializing WebGL2 & Rapier Physics...</div>
+          </div>
+          <div id="title-actions" class="title-actions hidden">
+            <button id="btn-play" class="btn-primary">ENTER BENGALURU</button>
+            <button id="btn-title-vault" class="btn-secondary">CHARACTERS &amp; VAULT</button>
+            <button id="btn-credits" class="btn-secondary">CREDITS &amp; OSM DATA</button>
+          </div>
+          <div class="title-footer">
+            <span>All crews, characters &amp; businesses are fictional. Temples, mosques &amp; churches are combat safe zones.</span>
+            <span>Map data © OpenStreetMap contributors</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- HUD Overlay -->
+      <div id="hud" class="hidden">
+        <!-- Top-left: Minimap + Street Sign -->
+        <div class="hud-top-left">
+          <div class="minimap-frame">
+            <canvas id="minimap-canvas" width="210" height="210"></canvas>
+            <div class="minimap-compass">N</div>
+            <div id="hud-safe-badge" class="safe-badge hidden">🕊 SACRED SAFE ZONE</div>
+          </div>
+          <div class="street-plate">
+            <div id="hud-street-en" class="street-en">Mahatma Gandhi Road</div>
+            <div id="hud-street-kn" class="street-kn">ಮಹಾತ್ಮ ಗಾಂಧಿ ರಸ್ತೆ</div>
+            <div class="zone-meta">
+              <span id="hud-zone-name">CENTRAL</span>
+              <span class="dot">•</span>
+              <span id="hud-time-weather">11:30 • Sunny Bengaluru Day</span>
+            </div>
+          </div>
+          <div class="vitals-bars">
+            <div class="vital-row">
+              <span class="vital-label">HP</span>
+              <div class="vital-track"><div id="hud-health-fill" class="vital-fill health"></div></div>
+              <span id="hud-health-val" class="vital-num">100</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-label">AR</span>
+              <div class="vital-track"><div id="hud-armor-fill" class="vital-fill armor"></div></div>
+              <span id="hud-armor-val" class="vital-num">50</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-label">ST</span>
+              <div class="vital-track"><div id="hud-stamina-fill" class="vital-fill stamina"></div></div>
+              <span id="hud-stamina-val" class="vital-num">100</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top-right: Wanted Stars, Cash, Respect, Weapon -->
+        <div class="hud-top-right">
+          <div id="hud-wanted" class="wanted-stars">
+            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          </div>
+          <div class="economy-box">
+            <div class="cash-val">₹ <span id="hud-cash">2,500</span></div>
+            <div class="respect-val">RESPECT <span id="hud-respect">0</span> • TURF <span id="hud-turf-count">0/8</span></div>
+          </div>
+          <div class="weapon-box">
+            <div id="hud-weapon-name" class="weapon-name">FISTS</div>
+            <div id="hud-weapon-ammo" class="weapon-ammo">MELEE</div>
+            <div id="hud-scope-badge" class="scope-pill">[Z] SCOPE: OFF</div>
+          </div>
+          <div id="hud-fps" class="fps-pill">60 FPS</div>
+        </div>
+
+        <!-- Mission Tracker (Right mid) -->
+        <div id="hud-mission-box" class="mission-tracker">
+          <div class="mission-header">ACTIVE OBJECTIVE</div>
+          <div id="hud-mission-title" class="mission-title">Explore Central Bengaluru</div>
+          <div id="hud-mission-desc" class="mission-desc">Walk MG Road toward Cubbon Park &amp; Vidhana Soudha. Press Tab for city map, M for Namma Metro.</div>
+          <div id="hud-mission-progress" class="mission-progress"></div>
+        </div>
+
+        <!-- Center Reticle & Hitmarker -->
+        <div id="crosshair" class="crosshair">
+          <div class="ch-dot"></div>
+          <div class="ch-line ch-top"></div>
+          <div class="ch-line ch-bottom"></div>
+          <div class="ch-line ch-left"></div>
+          <div class="ch-line ch-right"></div>
+          <div id="hitmarker" class="hitmarker hidden"></div>
+        </div>
+
+        <!-- Tactical Optical Scope Overlay ([Z] / Middle-Click / Settings) -->
+        <div id="scope-overlay" class="scope-overlay hidden">
+          <div class="scope-vignette"></div>
+          <div class="scope-ring">
+            <div class="scope-hline"></div>
+            <div class="scope-vline"></div>
+            <div class="scope-center-dot"></div>
+            <div class="scope-ticks-h">
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="scope-ticks-v">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="scope-top-bar">
+            <span id="scope-zoom-label">OPTICAL SCOPE • 2.5x</span>
+            <span>[Scroll] Zoom • [Z] Exit Scope</span>
+          </div>
+          <div id="scope-rangefinder" class="scope-bottom-bar">RANGE: -- m • NO TARGET</div>
+        </div>
+
+        <!-- Dynamic On-Person Target Lock & Shooting Position Indicator -->
+        <div id="target-lock-hud" class="target-lock-hud hidden">
+          <div class="tl-box">
+            <span class="tl-corner tl-tl"></span>
+            <span class="tl-corner tl-tr"></span>
+            <span class="tl-corner tl-bl"></span>
+            <span class="tl-corner tl-br"></span>
+            <div id="tl-aim-dot" class="tl-aim-dot"></div>
+          </div>
+          <div class="tl-info">
+            <div id="tl-name" class="tl-name">RIVAL SHOOTER</div>
+            <div id="tl-zone" class="tl-zone">🎯 BODY TARGET</div>
+            <div id="tl-pos" class="tl-pos">22.4m • POS X 560, Z 68</div>
+          </div>
+        </div>
+
+        <!-- Floating Hit / Damage Callout on Shot Person -->
+        <div id="shot-callout" class="shot-callout hidden"></div>
+
+        <!-- Vehicle Speedometer & Radio (Bottom right when driving) -->
+        <div id="hud-vehicle" class="vehicle-hud hidden">
+          <div class="radio-pill">
+            <span class="radio-dot"></span>
+            <span id="hud-radio-station">RADIO NADA 98.4 FM • Monsoon Synth</span>
+            <span class="radio-hint">[X] Station</span>
+          </div>
+          <div class="speedo-row">
+            <span id="hud-speed" class="speed-num">0</span>
+            <span class="speed-unit">KM/H</span>
+            <span id="hud-vehicle-name" class="vehicle-name">Auto-Rickshaw</span>
+          </div>
+          <div class="vehicle-health-track">
+            <div id="hud-vehicle-hp" class="vehicle-health-fill"></div>
+          </div>
+        </div>
+
+        <!-- Interaction Prompt & Subtitles (Bottom center) -->
+        <div class="hud-bottom-center">
+          <div id="hud-prompt" class="interact-prompt hidden"></div>
+          <div id="hud-toast" class="hud-toast hidden"></div>
+          <div id="hud-subtitle" class="subtitle-box hidden">
+            <div id="hud-sub-speaker" class="sub-speaker"></div>
+            <div id="hud-sub-text" class="sub-text"></div>
+          </div>
+        </div>
+
+        <!-- Controls Hint Strip -->
+        <div class="controls-strip">
+          <span><b>WASD</b> Move</span>
+          <span><b>Shift</b> Sprint</span>
+          <span><b>Space</b> Jump/Vault</span>
+          <span><b>C</b> Crouch/Cover</span>
+          <span><b>Alt</b> Roll</span>
+          <span><b>LMB/RMB</b> Shoot/Aim</span>
+          <span><b>Z</b> Scope</span>
+          <span><b>G</b> Grab</span>
+          <span><b>R</b> Reload</span>
+          <span><b>Q / 1-8</b> Weapons</span>
+          <span><b>E</b> Vehicle/Shop</span>
+          <span><b>Tab</b> Map</span>
+          <span><b>M</b> Metro</span>
+          <span><b>K</b> Vault</span>
+          <span><b>V</b> Front View</span>
+          <span><b>Esc</b> Pause</span>
+        </div>
+
+        <!-- Damage Vignette -->
+        <div id="damage-vignette" class="damage-vignette"></div>
+      </div>
+
+      <!-- Weapon Wheel Overlay (Hold Q) -->
+      <div id="weapon-wheel" class="modal-overlay hidden">
+        <div class="wheel-container">
+          <div class="wheel-title">WEAPON WHEEL <small>(Click or press 1-8)</small></div>
+          <div id="wheel-slots" class="wheel-grid"></div>
+        </div>
+      </div>
+
+      <!-- Full City Map & Turf Ownership Overlay (Tab) -->
+      <div id="city-map-modal" class="modal-overlay hidden">
+        <div class="map-panel">
+          <div class="panel-header">
+            <div>
+              <h2>BENGALURU TURF &amp; TRANSIT MAP</h2>
+              <span class="panel-sub">ಬೆಂಗಳೂರು ನಕ್ಷೆ • Click any Safehouse, Mission or Metro Station to set waypoint or fast-travel</span>
+            </div>
+            <button id="btn-close-map" class="btn-close">✕ [Tab]</button>
+          </div>
+          <div class="map-body">
+            <canvas id="city-map-canvas" width="760" height="560"></canvas>
+            <div class="map-sidebar">
+              <h3>ZONES &amp; RIVAL CREWS</h3>
+              <div id="map-zone-list" class="zone-list"></div>
+              <div class="map-legend">
+                <div><span class="leg-dot purple"></span> Namma Metro Purple Line</div>
+                <div><span class="leg-dot green"></span> Namma Metro Green Line</div>
+                <div><span class="leg-dot gold"></span> Mission / Safehouse</div>
+                <div><span class="leg-dot cyan"></span> Sacred Safe Zone</div>
+              </div>
+              <div class="osm-mini-credit">Map geometry © OpenStreetMap contributors</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Namma Metro Fast Travel Modal (M) -->
+      <div id="metro-modal" class="modal-overlay hidden">
+        <div class="metro-panel">
+          <div class="panel-header">
+            <div>
+              <h2>NAMMA METRO • ನಮ್ಮ ಮೆಟ್ರೋ</h2>
+              <span class="panel-sub">Purple Line (Whitefield ↔ Challaghatta) &amp; Green Line (Nagasandra ↔ Silk Institute) • Fare ₹30</span>
+            </div>
+            <button id="btn-close-metro" class="btn-close">✕ [M]</button>
+          </div>
+          <div id="metro-station-list" class="metro-grid"></div>
+        </div>
+      </div>
+
+      <!-- Weapon Shop / Safehouse Modal -->
+      <div id="shop-modal" class="modal-overlay hidden">
+        <div class="shop-panel">
+          <div class="panel-header">
+            <div>
+              <h2 id="shop-title">SAFEHOUSE &amp; ARMORY</h2>
+              <span id="shop-subtitle" class="panel-sub">Fictional Underground Quartermaster</span>
+            </div>
+            <button id="btn-close-shop" class="btn-close">✕</button>
+          </div>
+          <div id="shop-items" class="shop-grid"></div>
+        </div>
+      </div>
+
+      <!-- Pause & Settings Menu (Esc) -->
+      <div id="pause-modal" class="modal-overlay hidden">
+        <div class="pause-panel">
+          <h2>PAUSED — GARDEN CITY UNDERWORLD</h2>
+          <div class="settings-grid">
+            <label>
+              Graphics Quality
+              <select id="set-graphics">
+                <option value="low">Low (Max FPS)</option>
+                <option value="medium">Medium (Balanced)</option>
+                <option value="high" selected>High (4K MSAA Crisp)</option>
+                <option value="ultra">4K Ultra (SSAO + DoF + 4096 Shadows)</option>
+              </select>
+            </label>
+            <label>
+              Master Volume (<span id="set-vol-val">75%</span>)
+              <input id="set-volume" type="range" min="0" max="100" value="75" />
+            </label>
+            <label>
+              Subtitle Language
+              <select id="set-language">
+                <option value="en" selected>English (with Kannada/Hindi flavor)</option>
+                <option value="kn">Kannada + English</option>
+                <option value="hi">Hindi + English</option>
+              </select>
+            </label>
+            <label>
+              Weather &amp; Time of Day
+              <select id="set-weather">
+                <option value="day" selected>Bright Sunny Day (Default)</option>
+                <option value="auto">Dynamic Monsoon Day/Night Cycle</option>
+                <option value="dusk">Warm Monsoon Evening</option>
+                <option value="rain">Heavy Monsoon Downpour</option>
+                <option value="dawn">Misty Bengaluru Dawn</option>
+                <option value="night">Neon Night City</option>
+              </select>
+            </label>
+            <label>
+              Mouse Sensitivity (<span id="set-sens-val">1.0</span>)
+              <input id="set-sensitivity" type="range" min="30" max="200" value="100" />
+            </label>
+            <label>
+              Interact Key Binding
+              <select id="set-interact-key">
+                <option value="KeyE" selected>E (Default)</option>
+                <option value="KeyF">F</option>
+              </select>
+            </label>
+            <label>
+              Scope / Aim Option
+              <select id="set-scope-mode">
+                <option value="toggle" selected>Toggle Scope with [Z] / Middle-Click</option>
+                <option value="auto">Auto Optical Scope on Right-Click (RMB)</option>
+              </select>
+            </label>
+          </div>
+          <div class="pause-actions">
+            <button id="btn-resume" class="btn-primary">RESUME GAME</button>
+            <button id="btn-pause-vault" class="btn-secondary">CHARACTERS &amp; VAULT [K]</button>
+            <button id="btn-open-credits-pause" class="btn-secondary">CREDITS &amp; OSM ATTRIBUTION</button>
+            <button id="btn-respawn" class="btn-secondary">RETURN TO CENTRAL SAFEHOUSE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Free Fire-Style Character & Wardrobe Vault (Live 3D Showcase on Left + Customization Drawer on Right) -->
+      <div id="wardrobe-modal" class="vault-overlay hidden">
+        <div class="vault-hero-badge">
+          <div id="vault-perk-title" class="vault-perk-title">ARJUN "STRIKER" • SKILL: EAGLE FOCUS</div>
+          <div id="vault-perk-desc" class="vault-perk-desc">Old City Marksman — +20% Headshot Damage &amp; Tighter ADS</div>
+          <div class="vault-preview-controls">
+            <button id="btn-vault-rotate" class="btn-secondary">↺ PAUSE / SPIN 360°</button>
+            <button id="btn-vault-random" class="btn-secondary">🎲 RANDOM OUTFIT</button>
+          </div>
+        </div>
+        <div class="vault-drawer">
+          <div class="vault-header">
+            <div>
+              <h2>CHARACTERS &amp; VAULT</h2>
+              <span class="panel-sub">Mix &amp; match 6 Heroes, Faces, Dresses, Pants &amp; Shoes — live 3D preview</span>
+            </div>
+          </div>
+          <div class="vault-tabs">
+            <button class="vault-tab active" data-tab="characters">CHARACTERS</button>
+            <button class="vault-tab" data-tab="face">FACE</button>
+            <button class="vault-tab" data-tab="dress">DRESS</button>
+            <button class="vault-tab" data-tab="pants">PANTS</button>
+            <button class="vault-tab" data-tab="shoes">SHOES</button>
+          </div>
+          <div id="vault-grid" class="vault-grid"></div>
+          <div class="vault-footer">
+            <button id="btn-vault-done" class="btn-primary" style="width:100%;">EQUIP &amp; ENTER CITY</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Credits Modal -->
+      <div id="credits-modal" class="modal-overlay hidden">
+        <div class="credits-panel">
+          <h2>CREDITS &amp; ATTRIBUTION</h2>
+          <p><strong>Garden City Underworld</strong> — Original fictional open-world action game set in Bengaluru, India.</p>
+          <div class="osm-credit-box">
+            <strong>Map Data Attribution:</strong><br />
+            Real Bengaluru road geometry, building footprints, lakes, parks, and Namma Metro routes sourced from OpenStreetMap via Overpass API.<br />
+            <span class="osm-highlight">© OpenStreetMap contributors</span> (ODbL 1.0)
+          </div>
+          <p class="credits-disclaimer">
+            All gangs, characters, story missions, shop names, radio stations, and brands are 100% fictional and original.
+            No real people, real businesses, or real police agencies are depicted.
+            All temples, mosques, churches, and places of worship are strictly protected as combat-free safe zones.
+          </p>
+          <p class="credits-tech">
+            Built with Vite, Three.js (WebGL2), Rapier3D WASM Physics, Web Audio Procedural Soundscape, and GeoJSON Chunk Streaming.
+          </p>
+          <button id="btn-close-credits" class="btn-primary">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

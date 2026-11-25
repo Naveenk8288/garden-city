@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","features":[{"type":"Feature","id":"corridor_237193988","properties":{"kind":"road","corridor":true,"highway":"primary_link","name":"","name_kn":"","width":8,"oneway":false,"bridge":false,"layer":0},"geometry":{"type":"LineString","coordinates":[[77.646269,13.09736],[77.646244,13.097266]]}}]}

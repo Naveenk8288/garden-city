@@ -1,0 +1,23 @@
+{
+  "name": "garden-city-underworld",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Garden City Underworld — 3D Open-World Action Game set in Bengaluru, India",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "osm:central": "node scripts/fetch-osm.mjs --zones central,metro,corridors",
+    "osm:all": "node scripts/fetch-osm.mjs --zones all"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "three": "^0.172.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.172.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11"
+  }
+}

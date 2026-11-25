@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.netlify/
+.vercel/
+.osm-cache/
+.env
+.env.*
+.DS_Store
+
