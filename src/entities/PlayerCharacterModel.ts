@@ -715,7 +715,7 @@ function createFaceMaterial(faceId: FaceId): THREE.MeshStandardMaterial {
       ctx.fillRect(destX - 10, destY - 10, destW + 20, destH + 20);
       map.needsUpdate = true;
     };
-    img.src = '/textures/hero-face.jpg';
+    img.src = `${import.meta.env.BASE_URL || './'}textures/hero-face.jpg`;
     return new THREE.MeshStandardMaterial({ map, roughness: 0.58, metalness: 0.04 });
   }
 

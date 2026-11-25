@@ -1,5 +1,7 @@
 # Garden City Underworld
 
+**Play Live:** [GitHub Pages](https://naveenk8288.github.io/garden-city/) • [Vercel](https://garden-city-underworld.vercel.app/)
+
 A 3D open-world gangster action game set in a monsoon-lit recreation of **Bengaluru (Bangalore), India**, built with **Vite + Three.js (WebGL2) + Rapier3D (WASM)** and real **OpenStreetMap** geometry streamed in chunked GeoJSON tiles.
 
 > All gangs, characters, story missions, shop names, radio stations, and brands are **100% fictional and original**. Temples, mosques, and churches are automatically detected from OpenStreetMap and enforced as **Sacred Safe Zones** where combat is disabled.

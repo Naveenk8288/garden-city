@@ -113,15 +113,16 @@ export class ChunkStreamer {
   }
 
   public async init(onProgress?: (msg: string, pct: number) => void): Promise<void> {
+    const base = import.meta.env.BASE_URL || './';
     onProgress?.('Loading Bengaluru OpenStreetMap manifest...', 22);
-    const mRes = await fetch('/map-data/manifest.json');
-    if (!mRes.ok) throw new Error('Missing /map-data/manifest.json — run OSM pipeline first');
+    const mRes = await fetch(`${base}map-data/manifest.json`);
+    if (!mRes.ok) throw new Error('Missing map-data/manifest.json — run OSM pipeline first');
     this.manifest = await mRes.json();
 
     onProgress?.('Loading Namma Metro lines & highway corridors...', 42);
     const [metroRes, corrRes] = await Promise.all([
-      fetch('/map-data/metro.geojson').catch(() => null),
-      fetch('/map-data/corridors.geojson').catch(() => null)
+      fetch(`${base}map-data/metro.geojson`).catch(() => null),
+      fetch(`${base}map-data/corridors.geojson`).catch(() => null)
     ]);
 
     if (metroRes?.ok) {
@@ -280,7 +281,8 @@ export class ChunkStreamer {
       const hasOsmTile = Boolean(this.manifest?.chunks[key]);
 
       if (!features && hasOsmTile) {
-        const res = await fetch(`/map-data/chunks/${key}.geojson`);
+        const base = import.meta.env.BASE_URL || './';
+        const res = await fetch(`${base}map-data/chunks/${key}.geojson`);
         if (res.ok) {
           const fc = await res.json();
           features = fc.features || [];
