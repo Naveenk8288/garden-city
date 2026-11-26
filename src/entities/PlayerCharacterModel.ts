@@ -23,6 +23,9 @@ export interface ArticulatedCharacterRig {
   rightHip: THREE.Group;
   rightKnee: THREE.Group;
   weaponMount: THREE.Group;
+  leftWing?: THREE.Group;
+  rightWing?: THREE.Group;
+  ribbonTail?: THREE.Group;
 }
 
 interface DressPalette {
@@ -37,9 +40,11 @@ interface DressPalette {
   isArmored?: boolean;
   isBlazer?: boolean;
   isHoodie?: boolean;
+  hasDoveWings?: boolean;
 }
 
 const DRESS_PALETTES: Record<DressId, DressPalette> = {
+  seraph_crimson:{ outerHex: 0x6b141c, trimHex: 0x991b1b, darkHex: 0x3f0a10, innerHex: 0xf8f3e8, teeHex: 0xfefce8, hemHex: 0xd97706, glowHex: 0xfbbf24, shortSleeves: false, isBlazer: true, hasDoveWings: true },
   cognac_bomber: { outerHex: 0x8f5026, trimHex: 0xa66235, darkHex: 0x5c3116, innerHex: 0x4b5159, teeHex: 0xedeae2, hemHex: 0x34383f, shortSleeves: true },
   cyber_dj:      { outerHex: 0x151b28, trimHex: 0x222b3d, darkHex: 0x0b0f18, innerHex: 0x1e293b, teeHex: 0x0f172a, hemHex: 0x1e293b, glowHex: 0x38e8ff, shortSleeves: true },
   crimson_hoodie:{ outerHex: 0xc81e1e, trimHex: 0x991b1b, darkHex: 0x18181b, innerHex: 0x1e2028, teeHex: 0x18181b, hemHex: 0x18181b, glowHex: 0xff4757, shortSleeves: false, isHoodie: true },
@@ -57,6 +62,7 @@ interface PantsPalette {
 }
 
 const PANTS_PALETTES: Record<PantsId, PantsPalette> = {
+  seraph_ivory:   { baseHex: '#ebe5d8', stripeHex: 0xfbbf24, hasCargoPockets: false },
   olive_cargo:    { baseHex: '#47403a', hasCargoPockets: true },
   cyber_joggers:  { baseHex: '#151a24', stripeHex: 0x38e8ff, hasCargoPockets: false },
   midnight_jeans: { baseHex: '#1e304f', hasCargoPockets: false },
@@ -74,6 +80,7 @@ interface ShoesPalette {
 }
 
 const SHOES_PALETTES: Record<ShoesId, ShoesPalette> = {
+  seraph_wings:  { bodyHex: 0xf8f5ee, collarHex: 0x7f1d1d, soleHex: 0xfbbf24, soleGlowHex: 0xf59e0b, accentHex: 0xfbbf24 },
   rust_boots:    { bodyHex: 0x7b4520, collarHex: 0x3b2618, soleHex: 0x181a1f },
   neon_sneakers: { bodyHex: 0x161c2a, collarHex: 0x243047, soleHex: 0x38e8ff, soleGlowHex: 0x38e8ff, accentHex: 0x38e8ff },
   crimson_kicks: { bodyHex: 0xdc2626, collarHex: 0x18181b, soleHex: 0xf8fafc, accentHex: 0xf8fafc },
@@ -248,8 +255,67 @@ export function buildProtagonistCharacter(loadout: CharacterLoadout = DEFAULT_LO
     torso.add(hoodBack);
   }
 
-  // Glowing back emblem emblem strip on Neon / Cyber / Viper jackets (iconic Free Fire back view!)
-  if (neonMat) {
+  // Glowing back emblem strip on Neon / Cyber / Viper jackets (iconic Free Fire back view!)
+  let leftWing: THREE.Group | undefined;
+  let rightWing: THREE.Group | undefined;
+  let ribbonTail: THREE.Group | undefined;
+
+  if (dress.hasDoveWings) {
+    // Sculpted layered white dove-feather wings + flowing crimson silk ribbon inspired by the reference artwork!
+    const featherWhite = new THREE.MeshStandardMaterial({
+      color: 0xfffdf7,
+      emissive: 0xffe8b6,
+      emissiveIntensity: 0.25,
+      roughness: 0.42
+    });
+    const goldAccent = new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.45,
+      roughness: 0.25,
+      metalness: 0.78
+    });
+    const crimsonSilk = new THREE.MeshStandardMaterial({
+      color: 0x991b1b,
+      emissive: 0x450a0a,
+      emissiveIntensity: 0.25,
+      roughness: 0.38,
+      side: THREE.DoubleSide
+    });
+
+    const buildWing = (side: -1 | 1): THREE.Group => {
+      const wg = new THREE.Group();
+      wg.position.set(side * 0.12, 0.44, 0.16);
+      // 7 sculpted layered primary & secondary dove feathers fanning gracefully outward
+      for (let f = 0; f < 7; f++) {
+        const len = 0.64 - f * 0.055;
+        const w = 0.095 - f * 0.006;
+        const feather = new THREE.Mesh(new THREE.BoxGeometry(len, w, 0.022), f === 0 ? goldAccent : featherWhite);
+        feather.position.set(side * (len * 0.52 + 0.04), 0.16 - f * 0.075, 0.06 + f * 0.014);
+        feather.rotation.z = side * (0.42 - f * 0.16);
+        feather.rotation.y = side * (-0.36 - f * 0.03);
+        feather.castShadow = true;
+        wg.add(feather);
+      }
+      return wg;
+    };
+
+    leftWing = buildWing(-1);
+    rightWing = buildWing(1);
+    torso.add(leftWing, rightWing);
+
+    // Flowing crimson silk ribbon scarf trailing elegantly behind shoulder
+    ribbonTail = new THREE.Group();
+    ribbonTail.position.set(-0.14, 0.52, 0.14);
+    for (let r = 0; r < 5; r++) {
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(0.11 - r * 0.012, 0.22, 0.016), crimsonSilk);
+      seg.position.set(-r * 0.04, -r * 0.18 - 0.1, 0.05 + r * 0.075);
+      seg.rotation.x = 0.38 + r * 0.08;
+      seg.rotation.z = -0.18 - r * 0.04;
+      ribbonTail.add(seg);
+    }
+    torso.add(ribbonTail);
+  } else if (neonMat) {
     const backV = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0), neonMat);
     backV.scale.set(1.2, 1.35, 0.16);
     backV.position.set(0, 0.36, 0.185);
@@ -463,7 +529,10 @@ export function buildProtagonistCharacter(loadout: CharacterLoadout = DEFAULT_LO
     leftKnee: leftLeg.knee,
     rightHip: rightLeg.hip,
     rightKnee: rightLeg.knee,
-    weaponMount: rightArm.handMount
+    weaponMount: rightArm.handMount,
+    leftWing,
+    rightWing,
+    ribbonTail
   };
 }
 
@@ -496,7 +565,41 @@ function buildFaceAndHead(faceId: FaceId, skinMat: THREE.MeshStandardMaterial): 
     headGroup.add(ear);
   }
 
-  if (faceId === 'hero_portrait') {
+  if (faceId === 'seraph_halo') {
+    // Ethereal snowy-ivory swept hair + luminous pearl orb + floating golden halo ring!
+    const ivoryHair = new THREE.MeshStandardMaterial({ color: 0xf3ead8, roughness: 0.55, metalness: 0.08 });
+    const goldHalo = new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 1.9,
+      roughness: 0.18,
+      metalness: 0.85
+    });
+    const pearlMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xffe4b5,
+      emissiveIntensity: 1.4,
+      roughness: 0.12
+    });
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(0.132, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.56), ivoryHair);
+    crown.scale.set(0.96, 1.06, 1.04);
+    crown.position.set(0, 0.238, 0.008);
+    headGroup.add(crown);
+
+    const hairSweep = new THREE.Mesh(new THREE.ConeGeometry(0.068, 0.24, 8), ivoryHair);
+    hairSweep.position.set(0, 0.21, 0.145);
+    hairSweep.rotation.x = 0.62;
+    headGroup.add(hairSweep);
+
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.012, 8, 28), goldHalo);
+    halo.rotation.x = Math.PI / 2 - 0.18;
+    halo.position.set(0, 0.39, 0.02);
+    headGroup.add(halo);
+
+    const pearl = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 10), pearlMat);
+    pearl.position.set(0, 0.365, -0.115);
+    headGroup.add(pearl);
+  } else if (faceId === 'hero_portrait') {
     const hairMat = new THREE.MeshStandardMaterial({ color: 0xd8cba8, roughness: 0.72, metalness: 0.06 });
     const bandMat = new THREE.MeshStandardMaterial({ color: 0x3a404a, roughness: 0.35, metalness: 0.65 });
     const emblemMat = new THREE.MeshStandardMaterial({ color: 0xc2934b, roughness: 0.35, metalness: 0.7 });
@@ -740,7 +843,7 @@ function createFaceMaterial(faceId: FaceId): THREE.MeshStandardMaterial {
     ctx.beginPath();
     ctx.ellipse(cx + sx, 118, 11, 5.5, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = faceId === 'shadow_mask' ? '#991b1b' : '#2a1a10';
+    ctx.fillStyle = faceId === 'shadow_mask' ? '#991b1b' : faceId === 'seraph_halo' ? '#f59e0b' : '#2a1a10';
     ctx.beginPath();
     ctx.arc(cx + sx, 118, 4.8, 0, Math.PI * 2);
     ctx.fill();

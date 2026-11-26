@@ -269,7 +269,20 @@ export function buildSeatedDriver(spec: SeatedDriverSpec): THREE.Group {
   headGroup.add(head);
 
   if (loadout) {
-    if (loadout.faceId === 'hero_portrait') {
+    if (loadout.faceId === 'seraph_halo') {
+      const hair = new THREE.Mesh(
+        new THREE.SphereGeometry(0.126, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.56),
+        new THREE.MeshStandardMaterial({ color: 0xf3ead8, roughness: 0.55 })
+      );
+      hair.position.y = 0.025;
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(0.11, 0.01, 6, 18),
+        new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 1.6 })
+      );
+      halo.rotation.x = Math.PI / 2;
+      halo.position.y = 0.14;
+      headGroup.add(hair, halo);
+    } else if (loadout.faceId === 'hero_portrait') {
       // Iconic Striker metal forehead headband + blond spiky hair
       const band = new THREE.Mesh(
         new THREE.CylinderGeometry(0.123, 0.123, 0.042, 14),

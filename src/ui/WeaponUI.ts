@@ -108,8 +108,13 @@ export class WeaponUI {
         : st.unlocked
           ? `${st.mag} / ${st.reserve}`
           : `LOCKED (₹${def.price})`;
+      const keyLabel =
+        def.slot <= 9 ? `[${def.slot}]` :
+        def.slot === 10 ? '[0]' :
+        def.slot === 11 ? '[-]' :
+        def.slot === 12 ? '[=]' : '[Q]';
       div.innerHTML = `
-        <div class="slot-key">[${def.slot}] ${def.category.toUpperCase()}</div>
+        <div class="slot-key">${keyLabel} ${def.subType}</div>
         <div class="slot-name">${def.name}</div>
         <div class="slot-meta">${ammoTxt}</div>
       `;

@@ -1,8 +1,8 @@
-export type FaceId = 'hero_portrait' | 'fixer_beard' | 'cyber_visor' | 'shadow_mask' | 'kingpin_shades' | 'specops_helmet';
-export type DressId = 'cognac_bomber' | 'cyber_dj' | 'crimson_hoodie' | 'gold_blazer' | 'viper_biker' | 'tactical_armor' | 'royal_kurta' | 'arctic_trench';
-export type PantsId = 'olive_cargo' | 'cyber_joggers' | 'midnight_jeans' | 'kingpin_slacks' | 'desert_camo' | 'viper_track';
-export type ShoesId = 'rust_boots' | 'neon_sneakers' | 'crimson_kicks' | 'stealth_boots' | 'gold_loafers' | 'viper_racers';
-export type CharacterPresetId = 'striker' | 'kaal_dj' | 'kavya_shadow' | 'vikram_don' | 'zoya_viper' | 'rudra_ops';
+export type FaceId = 'seraph_halo' | 'hero_portrait' | 'fixer_beard' | 'cyber_visor' | 'shadow_mask' | 'kingpin_shades' | 'specops_helmet';
+export type DressId = 'seraph_crimson' | 'cognac_bomber' | 'cyber_dj' | 'crimson_hoodie' | 'gold_blazer' | 'viper_biker' | 'tactical_armor' | 'royal_kurta' | 'arctic_trench';
+export type PantsId = 'seraph_ivory' | 'olive_cargo' | 'cyber_joggers' | 'midnight_jeans' | 'kingpin_slacks' | 'desert_camo' | 'viper_track';
+export type ShoesId = 'seraph_wings' | 'rust_boots' | 'neon_sneakers' | 'crimson_kicks' | 'stealth_boots' | 'gold_loafers' | 'viper_racers';
+export type CharacterPresetId = 'aura_seraph' | 'striker' | 'kaal_dj' | 'kavya_shadow' | 'vikram_don' | 'zoya_viper' | 'rudra_ops';
 
 export interface CharacterLoadout {
   presetId: CharacterPresetId;
@@ -32,6 +32,16 @@ export interface CosmeticItem<T extends string> {
 }
 
 export const CHARACTER_PRESETS: CharacterPreset[] = [
+  {
+    id: 'aura_seraph',
+    name: 'AURA',
+    codename: 'SERAPH',
+    role: 'Golden Cloud Winged Sentinel',
+    perkTitle: 'SKY DOVE GRACE',
+    perkDesc: 'Animated White Dove Wings, Crimson Ribbon & +15% Move Speed',
+    accent: '#fbbf24',
+    loadout: { faceId: 'seraph_halo', dressId: 'seraph_crimson', pantsId: 'seraph_ivory', shoesId: 'seraph_wings' }
+  },
   {
     id: 'striker',
     name: 'ARJUN',
@@ -95,6 +105,7 @@ export const CHARACTER_PRESETS: CharacterPreset[] = [
 ];
 
 export const FACE_OPTIONS: CosmeticItem<FaceId>[] = [
+  { id: 'seraph_halo', name: 'Seraph Pearl Halo', tag: 'GOLDEN EYES • WHITE HAIR • HALO', swatch: '#f8fafc', accent: '#fbbf24' },
   { id: 'hero_portrait', name: 'Striker Headband', tag: 'UPLOADED FACE • BLOND SPIKES', swatch: '#d8cba8', accent: '#f59e0b' },
   { id: 'fixer_beard', name: 'Bengaluru Fixer', tag: 'TRIMMED BEARD • DARK FADE', swatch: '#5c3d28', accent: '#c68e67' },
   { id: 'cyber_visor', name: 'Cyber DJ Visor', tag: 'GLOWING CYAN LED SHADES', swatch: '#38e8ff', accent: '#0ea5e9' },
@@ -104,6 +115,7 @@ export const FACE_OPTIONS: CosmeticItem<FaceId>[] = [
 ];
 
 export const DRESS_OPTIONS: CosmeticItem<DressId>[] = [
+  { id: 'seraph_crimson', name: 'Seraph Dove-Wing Coat', tag: 'WHITE DOVE WINGS • CRIMSON RIBBON • GOLD', swatch: '#7f1d1d', accent: '#fbbf24' },
   { id: 'cognac_bomber', name: 'Cognac Leather Bomber', tag: 'OPEN LEATHER • WHITE TEE', swatch: '#8f5026', accent: '#edeae2' },
   { id: 'cyber_dj', name: 'Cyber DJ Neon Jacket', tag: 'OBSIDIAN • GLOWING CYAN LED', swatch: '#141926', accent: '#38e8ff' },
   { id: 'crimson_hoodie', name: 'Crimson Tactical Hoodie', tag: 'RED & BLACK STREET RIG', swatch: '#dc2626', accent: '#18181b' },
@@ -115,6 +127,7 @@ export const DRESS_OPTIONS: CosmeticItem<DressId>[] = [
 ];
 
 export const PANTS_OPTIONS: CosmeticItem<PantsId>[] = [
+  { id: 'seraph_ivory', name: 'Seraph Ivory & Gold', tag: 'CELESTIAL WHITE • GOLDEN TRIM', swatch: '#e7e2d8', accent: '#fbbf24' },
   { id: 'olive_cargo', name: 'Olive Tactical Cargos', tag: 'MULTI-POCKET STREET FIT', swatch: '#47403a' },
   { id: 'cyber_joggers', name: 'Cyber Neon Joggers', tag: 'BLACK • CYAN KNEE STRIPES', swatch: '#161b26', accent: '#38e8ff' },
   { id: 'midnight_jeans', name: 'Midnight Indigo Denim', tag: 'SLIM URBAN JEANS', swatch: '#1e2f4d' },
@@ -124,6 +137,7 @@ export const PANTS_OPTIONS: CosmeticItem<PantsId>[] = [
 ];
 
 export const SHOES_OPTIONS: CosmeticItem<ShoesId>[] = [
+  { id: 'seraph_wings', name: 'Seraph Winged Boots', tag: 'IVORY LEATHER • GOLDEN GLOW SOLE', swatch: '#f8fafc', accent: '#fbbf24' },
   { id: 'rust_boots', name: 'Rust Leather Boots', tag: 'RUGGED BROWN • DARK SOLE', swatch: '#7b4520', accent: '#181a1f' },
   { id: 'neon_sneakers', name: 'Cyber LED High-Tops', tag: 'GLOWING CYAN OUTSOLE', swatch: '#141926', accent: '#38e8ff' },
   { id: 'crimson_kicks', name: 'Crimson Air Sneakers', tag: 'RED & WHITE STREET KICKS', swatch: '#dc2626', accent: '#f8fafc' },
@@ -133,14 +147,14 @@ export const SHOES_OPTIONS: CosmeticItem<ShoesId>[] = [
 ];
 
 export const DEFAULT_LOADOUT: CharacterLoadout = {
-  presetId: 'striker',
-  faceId: 'hero_portrait',
-  dressId: 'cognac_bomber',
-  pantsId: 'olive_cargo',
-  shoesId: 'rust_boots'
+  presetId: 'aura_seraph',
+  faceId: 'seraph_halo',
+  dressId: 'seraph_crimson',
+  pantsId: 'seraph_ivory',
+  shoesId: 'seraph_wings'
 };
 
-const LOADOUT_SAVE_KEY = 'garden_city_character_loadout_v1';
+const LOADOUT_SAVE_KEY = 'garden_city_character_loadout_v2';
 
 export function saveCharacterLoadout(loadout: CharacterLoadout): void {
   try {

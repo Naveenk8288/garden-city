@@ -13,6 +13,7 @@ import { WeaponId, WeaponSystem } from './combat/WeaponSystem';
 import { WantedSystem } from './ai/WantedSystem';
 import { EnemyAIManager } from './ai/EnemyAI';
 import { VehicleSystem } from './vehicles/VehicleSystem';
+import { MetroTrainSystem } from './world/MetroTrainSystem';
 import { MissionSystem } from './missions/MissionSystem';
 import { AudioEngine } from './audio/AudioEngine';
 import { WeaponUI } from './ui/WeaponUI';
@@ -54,6 +55,7 @@ class GardenCityGame {
   private wanted!: WantedSystem;
   private enemies!: EnemyAIManager;
   private vehicles!: VehicleSystem;
+  private metroTrains!: MetroTrainSystem;
   private missions!: MissionSystem;
   private audio = new AudioEngine();
   private weaponUI = new WeaponUI();
@@ -155,6 +157,7 @@ class GardenCityGame {
     this.enemies = new EnemyAIManager(this.scene, this.streamer, this.physics, this.vfx, this.wanted);
     this.vehicles = new VehicleSystem(this.scene, this.streamer, this.physics);
     this.vehicles.setPlayerLoadout(this.characterLoadout);
+    this.metroTrains = new MetroTrainSystem(this.scene);
     this.missions = new MissionSystem(this.scene, this.enemies, this.wanted, this.vehicles);
 
     // Park iconic starter Bengaluru vehicles neatly along the road ahead of the player
@@ -215,8 +218,16 @@ class GardenCityGame {
   private wireSystemCallbacks(): void {
     this.weapons.onShotFired = (def, pos) => {
       this.audio.playGunshot(def.id, 1.0);
-      this.enemies.alertNearbyOnGunshot(pos, 62);
-      this.wanted.reportCrime(5);
+      this.enemies.alertNearbyOnGunshot(pos, def.silenced ? 18 : 62);
+      this.wanted.reportCrime(def.silenced ? 2 : 5);
+    };
+
+    this.weapons.onExplosion = (pos) => {
+      const d = pos.distanceTo(this.player.position);
+      this.audio.playExplosion(d);
+      this.enemies.alertNearbyOnGunshot(pos, 95);
+      this.wanted.reportCrime(16);
+      this.damageFlash = Math.min(0.65, this.damageFlash + Math.max(0, 0.4 - d * 0.01));
     };
 
     this.weapons.onMeleeSwing = () => {
@@ -345,17 +356,44 @@ class GardenCityGame {
     };
 
     this.shopMetroUI.onMetroSelect = (stn) => {
+      if (this.player.inVehicle) {
+        this.vehicles.exitVehicle();
+        this.player.inVehicle = false;
+      }
       if (this.missions.cash >= 30) {
         this.missions.cash -= 30;
       }
       this.audio.playMetroChime();
+      const { startStation, lineName } = this.metroTrains.boardTrain(this.player.position, stn);
+      this.player.inVehicle = true; // Suppresses on-foot movement/mesh while riding train
+      this.shopMetroUI.showSubtitle(
+        `NAMMA METRO • ${lineName}`,
+        `Boarded at ${startStation.name} → Traveling live to ${stn.name}. [V] Inside/Skyline View • [E] Exit • [Space] Fast Arrive`,
+        `${startStation.nameKn} ನಿಲ್ದಾಣದಿಂದ ${stn.nameKn} ಕಡೆಗೆ ನಮ್ಮ ಮೆಟ್ರೋ ಪ್ರಯಾಣ ಆರಂಭವಾಗಿದೆ.`,
+        `${startStation.name} से ${stn.name} के लिए नम्मा मेट्रो यात्रा शुरू हुई।`,
+        6.5
+      );
+    };
+
+    this.metroTrains.onStationArrival = (stn, isDest) => {
+      this.audio.playMetroChime();
       this.shopMetroUI.showSubtitle(
         'NAMMA METRO • ನಮ್ಮ ಮೆಟ್ರೋ',
-        `Arriving at ${stn.name} Station. Doors will open on the left.`,
-        `ಮುಂದಿನ ನಿಲ್ದಾಣ: ${stn.nameKn}. ಬಾಗಿಲುಗಳು ಎಡಭಾಗದಲ್ಲಿ ತೆರೆಯುತ್ತವೆ.`,
-        `अगला स्टेशन: ${stn.name}। दरवाज़े बाईं ओर खुलेंगे।`,
-        5.5
+        isDest
+          ? `Arrived at ${stn.name} Station! Stepping onto the street.`
+          : `Passing ${stn.name} Station. Doors will open on the left.`,
+        isDest
+          ? `${stn.nameKn} ನಿಲ್ದಾಣಕ್ಕೆ ತಲುಪಿದ್ದೀರಿ!`
+          : `ಮುಂದಿನ ನಿಲ್ದಾಣ: ${stn.nameKn}. ಬಾಗಿಲುಗಳು ಎಡಭಾಗದಲ್ಲಿ ತೆರೆಯುತ್ತವೆ.`,
+        isDest
+          ? `${stn.name} स्टेशन पर पहुँच गए हैं!`
+          : `अगला स्टेशन: ${stn.name}। दरवाज़े बाईं ओर खुलेंगे।`,
+        4.8
       );
+    };
+
+    this.metroTrains.onRideExited = (stn) => {
+      this.player.inVehicle = false;
       void this.fastTravelTo(stn.lat, stn.lon, `Namma Metro: ${stn.name}`);
     };
 
@@ -393,6 +431,9 @@ class GardenCityGame {
   }
 
   private openWardrobeVault(): void {
+    if (this.metroTrains.boardedTrain) {
+      this.metroTrains.exitTrain(false);
+    }
     if (this.player.inVehicle) {
       const exitPos = this.vehicles.exitVehicle();
       this.player.inVehicle = false;
@@ -409,6 +450,11 @@ class GardenCityGame {
   }
 
   private async fastTravelTo(lat: number, lon: number, label: string): Promise<void> {
+    if (this.metroTrains.boardedTrain) {
+      this.metroTrains.boardedTrain.isPlayerBoarded = false;
+      this.metroTrains.boardedTrain = null;
+      this.metroTrains.destinationStation = null;
+    }
     if (this.player.inVehicle) {
       this.vehicles.exitVehicle();
       this.player.inVehicle = false;
@@ -882,9 +928,20 @@ class GardenCityGame {
         this.shopMetroUI.showToast(`📻 ${st.name} — ${st.genre}`, 2.0);
       }
 
-      // Interaction prompt: Enter/Exit Vehicle OR Open Safehouse/Armory
+      // Interaction prompt: Namma Metro Ride / Enter-Exit Vehicle / Safehouse-Armory / Board Metro at Station
       let promptText = '';
-      if (this.player.inVehicle) {
+      const ridingMetro = Boolean(this.metroTrains.boardedTrain);
+      if (ridingMetro) {
+        if (input.cameraFlipPressed) {
+          const inside = this.metroTrains.toggleCameraView();
+          this.shopMetroUI.showToast(inside ? '🚇 Inside Metro Cabin View' : '🚇 Elevated Skyline Metro View', 1.4);
+        }
+        if (input.interactPressed) {
+          this.metroTrains.exitTrain(false);
+        } else if (input.jumpPressed && this.metroTrains.destinationStation) {
+          this.metroTrains.exitTrain(true);
+        }
+      } else if (this.player.inVehicle) {
         promptText = `Driving ${this.vehicles.activeVehicle?.name} • [${this.input.interactKey.replace('Key', '')}] Exit • [Space] Handbrake Drift • [H] Horn • [X] Radio`;
         if (input.interactPressed) {
           const exitPos = this.vehicles.exitVehicle();
@@ -893,6 +950,7 @@ class GardenCityGame {
         }
       } else {
         const nearShop = this.findNearbySafehouseOrShop(this.player.position);
+        const nearMetro = this.metroTrains.findNearestStation(this.player.position, 44);
         const nearVeh = this.vehicles.findNearestVehicle(this.player.position, 5.2);
         if (nearShop) {
           promptText = `[${this.input.interactKey.replace('Key', '')}] ${nearShop.label}`;
@@ -923,6 +981,21 @@ class GardenCityGame {
             this.vehicles.enterVehicle(nearVeh);
             this.player.inVehicle = true;
           }
+        } else if (nearMetro) {
+          promptText = `[${this.input.interactKey.replace('Key', '')}] Board Namma Metro at ${nearMetro.name} (₹30) • [M] Pick Destination`;
+          if (input.interactPressed) {
+            if (this.missions.cash >= 30) this.missions.cash -= 30;
+            this.audio.playMetroChime();
+            const { lineName } = this.metroTrains.boardTrain(this.player.position);
+            this.player.inVehicle = true;
+            this.shopMetroUI.showSubtitle(
+              `NAMMA METRO • ${lineName}`,
+              `Boarded live Namma Metro at ${nearMetro.name}! Press [V] for Cabin View, [E] to exit at any station, or [M] to set destination.`,
+              `${nearMetro.nameKn} ನಿಲ್ದಾಣದಲ್ಲಿ ಮೆಟ್ರೋ ಹತ್ತಿದ್ದೀರಿ!`,
+              `${nearMetro.name} स्टेशन से लाइव मेट्रो में सवार हुए!`,
+              5.5
+            );
+          }
         }
       }
 
@@ -942,7 +1015,8 @@ class GardenCityGame {
 
       // Feed current weapon posture style (melee / pistol / twohand) & reload state to character rig
       const wId = this.weapons.currentId;
-      this.player.equippedWeaponStyle = !isFirearm ? 'melee' : wId === 'pistol' ? 'pistol' : 'twohand';
+      const isPistolStyle = wId === 'pistol' || wId === 'silenced_pistol' || wId === 'deagle' || wId === 'dual_uzi';
+      this.player.equippedWeaponStyle = !isFirearm ? 'melee' : isPistolStyle ? 'pistol' : 'twohand';
       this.player.isReloadingWeapon = this.weapons.reloading;
 
       this.player.isMeleeBlocking = !this.player.inVehicle && input.aim && !isFirearm;
@@ -1014,6 +1088,15 @@ class GardenCityGame {
         }
       }
 
+      // Live Running Namma Metro Trains (Purple & Green Lines across Bengaluru!)
+      const metroState = this.metroTrains.update(dt, this.camera, input.lookDeltaX);
+      if (metroState.riding && metroState.worldPos) {
+        this.player.teleport(metroState.worldPos.x, metroState.worldPos.y, metroState.worldPos.z);
+        const destTxt = metroState.destination ? ` → Dest: ${metroState.destination.name} ([Space] Fast Arrive)` : '';
+        const nextTxt = metroState.nextStation ? `Next: ${metroState.nextStation.name}` : 'Cruising Elevated Viaduct';
+        promptText = `🚇 ${metroState.lineName} • ${metroState.speedKmh} KM/H • ${nextTxt}${destTxt} • [V] ${metroState.interiorView ? 'Skyline' : 'Cabin'} View • [${this.input.interactKey.replace('Key', '')}] Get Off`;
+      }
+
       // Vehicles & Traffic AI update + vehicle ramming knockouts
       const vehRes = this.vehicles.update(
         dt,
@@ -1023,7 +1106,7 @@ class GardenCityGame {
         this.env.nightFactor,
         this.wanted.stars
       );
-      if (vehRes.playerWorldPos && this.vehicles.activeVehicle) {
+      if (!metroState.riding && vehRes.playerWorldPos && this.vehicles.activeVehicle) {
         this.player.teleport(vehRes.playerWorldPos.x, vehRes.playerWorldPos.y, vehRes.playerWorldPos.z);
         const av = this.vehicles.activeVehicle;
         const fwdDir = new THREE.Vector3(-Math.sin(av.yaw), 0, -Math.cos(av.yaw));
@@ -1069,12 +1152,14 @@ class GardenCityGame {
       this.audio.update(
         dt,
         this.env.rainIntensity,
-        this.player.inVehicle,
+        this.player.inVehicle && !metroState.riding,
         vehRes.speedKmh,
         this.vehicles.activeVehicle?.kind || 'car',
         this.wanted.stars,
         Boolean(safeZone),
-        this.vehicles.getCurrentRadio()
+        this.vehicles.getCurrentRadio(),
+        metroState.riding,
+        metroState.speedKmh
       );
 
       this.updateHUD(dt, promptText);

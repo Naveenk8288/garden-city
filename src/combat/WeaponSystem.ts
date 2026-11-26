@@ -2,13 +2,29 @@ import * as THREE from 'three';
 import { PhysicsWorld } from '../engine/PhysicsWorld';
 import { VFXSystem } from './VFXSystem';
 
-export type WeaponId = 'fists' | 'bat' | 'knife' | 'chain' | 'pistol' | 'smg' | 'shotgun' | 'rifle';
+export type WeaponId =
+  | 'fists'
+  | 'bat'
+  | 'knife'
+  | 'katana'
+  | 'chain'
+  | 'pistol'
+  | 'silenced_pistol'
+  | 'deagle'
+  | 'smg'
+  | 'dual_uzi'
+  | 'shotgun'
+  | 'rifle'
+  | 'sniper'
+  | 'lmg'
+  | 'launcher';
 
 export interface WeaponDef {
   id: WeaponId;
   slot: number;
   name: string;
   category: 'melee' | 'firearm';
+  subType: 'MELEE' | 'PISTOL' | 'SMG' | 'SHOTGUN' | 'RIFLE' | 'SNIPER' | 'HEAVY';
   damage: number;
   fireRate: number; // shots or swings per second
   range: number;
@@ -23,17 +39,26 @@ export interface WeaponDef {
   price: number;
   ammoPrice: number;
   knockback: number;
+  silenced?: boolean;
+  explosiveRadius?: number;
 }
 
 export const WEAPON_DEFS: WeaponDef[] = [
-  { id: 'fists', slot: 1, name: 'Street Brawling', category: 'melee', damage: 22, fireRate: 2.6, range: 2.4, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 0, ammoPrice: 0, knockback: 5 },
-  { id: 'bat', slot: 2, name: 'Willow Cricket Bat', category: 'melee', damage: 38, fireRate: 1.7, range: 2.9, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 600, ammoPrice: 0, knockback: 10 },
-  { id: 'knife', slot: 3, name: 'Bazaar Switchblade', category: 'melee', damage: 34, fireRate: 3.1, range: 2.5, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 850, ammoPrice: 0, knockback: 4 },
-  { id: 'chain', slot: 4, name: 'Peenya Steel Chain', category: 'melee', damage: 46, fireRate: 1.35, range: 3.5, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 1200, ammoPrice: 0, knockback: 13 },
-  { id: 'pistol', slot: 5, name: 'Deccan 9mm Pistol', category: 'firearm', damage: 28, fireRate: 4.5, range: 95, magSize: 15, reserveMax: 150, reloadTime: 1.35, spread: 0.016, pellets: 1, recoilPitch: 0.018, recoilYaw: 0.006, auto: false, price: 0, ammoPrice: 180, knockback: 6 },
-  { id: 'smg', slot: 6, name: 'Indira Compact SMG', category: 'firearm', damage: 20, fireRate: 11.5, range: 85, magSize: 32, reserveMax: 256, reloadTime: 1.7, spread: 0.036, pellets: 1, recoilPitch: 0.014, recoilYaw: 0.012, auto: true, price: 2400, ammoPrice: 260, knockback: 4 },
-  { id: 'shotgun', slot: 7, name: 'Majestic Pump Shotgun', category: 'firearm', damage: 17, fireRate: 1.25, range: 42, magSize: 8, reserveMax: 64, reloadTime: 2.1, spread: 0.078, pellets: 8, recoilPitch: 0.055, recoilYaw: 0.02, auto: false, price: 3800, ammoPrice: 320, knockback: 18 },
-  { id: 'rifle', slot: 8, name: 'Kaveri Assault Rifle', category: 'firearm', damage: 34, fireRate: 8.2, range: 145, magSize: 30, reserveMax: 240, reloadTime: 2.0, spread: 0.018, pellets: 1, recoilPitch: 0.021, recoilYaw: 0.01, auto: true, price: 5800, ammoPrice: 400, knockback: 9 }
+  { id: 'fists', slot: 1, name: 'Street Brawling', category: 'melee', subType: 'MELEE', damage: 22, fireRate: 2.6, range: 2.4, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 0, ammoPrice: 0, knockback: 5 },
+  { id: 'bat', slot: 2, name: 'Willow Cricket Bat', category: 'melee', subType: 'MELEE', damage: 38, fireRate: 1.7, range: 2.9, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 0, ammoPrice: 0, knockback: 10 },
+  { id: 'knife', slot: 3, name: 'Bazaar Switchblade', category: 'melee', subType: 'MELEE', damage: 36, fireRate: 3.3, range: 2.6, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 0, ammoPrice: 0, knockback: 4 },
+  { id: 'katana', slot: 4, name: 'Sandalwood Katana', category: 'melee', subType: 'MELEE', damage: 56, fireRate: 2.2, range: 3.5, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 0, ammoPrice: 0, knockback: 9 },
+  { id: 'pistol', slot: 5, name: 'Deccan 9mm Pistol', category: 'firearm', subType: 'PISTOL', damage: 28, fireRate: 4.8, range: 95, magSize: 15, reserveMax: 150, reloadTime: 1.35, spread: 0.016, pellets: 1, recoilPitch: 0.018, recoilYaw: 0.006, auto: false, price: 0, ammoPrice: 160, knockback: 6 },
+  { id: 'silenced_pistol', slot: 6, name: 'Cubbon Silenced 9mm', category: 'firearm', subType: 'PISTOL', damage: 32, fireRate: 5.0, range: 105, magSize: 16, reserveMax: 160, reloadTime: 1.3, spread: 0.01, pellets: 1, recoilPitch: 0.012, recoilYaw: 0.004, auto: false, price: 0, ammoPrice: 180, knockback: 5, silenced: true },
+  { id: 'deagle', slot: 7, name: 'Vidhana .50 Deagle', category: 'firearm', subType: 'PISTOL', damage: 64, fireRate: 2.2, range: 115, magSize: 7, reserveMax: 70, reloadTime: 1.55, spread: 0.012, pellets: 1, recoilPitch: 0.044, recoilYaw: 0.014, auto: false, price: 0, ammoPrice: 240, knockback: 14 },
+  { id: 'smg', slot: 8, name: 'Indira Compact SMG', category: 'firearm', subType: 'SMG', damage: 21, fireRate: 11.8, range: 85, magSize: 32, reserveMax: 256, reloadTime: 1.65, spread: 0.034, pellets: 1, recoilPitch: 0.014, recoilYaw: 0.012, auto: true, price: 0, ammoPrice: 240, knockback: 4 },
+  { id: 'shotgun', slot: 9, name: 'Majestic Pump Shotgun', category: 'firearm', subType: 'SHOTGUN', damage: 18, fireRate: 1.3, range: 44, magSize: 8, reserveMax: 64, reloadTime: 2.0, spread: 0.075, pellets: 8, recoilPitch: 0.055, recoilYaw: 0.02, auto: false, price: 0, ammoPrice: 280, knockback: 18 },
+  { id: 'rifle', slot: 10, name: 'Kaveri Assault Rifle', category: 'firearm', subType: 'RIFLE', damage: 35, fireRate: 8.4, range: 150, magSize: 30, reserveMax: 240, reloadTime: 1.9, spread: 0.017, pellets: 1, recoilPitch: 0.02, recoilYaw: 0.01, auto: true, price: 0, ammoPrice: 340, knockback: 9 },
+  { id: 'sniper', slot: 11, name: 'Nandi .338 Sniper', category: 'firearm', subType: 'SNIPER', damage: 105, fireRate: 0.95, range: 260, magSize: 5, reserveMax: 45, reloadTime: 2.35, spread: 0.0025, pellets: 1, recoilPitch: 0.062, recoilYaw: 0.008, auto: false, price: 0, ammoPrice: 380, knockback: 22 },
+  { id: 'lmg', slot: 12, name: 'Peenya M249 Heavy LMG', category: 'firearm', subType: 'HEAVY', damage: 30, fireRate: 10.8, range: 140, magSize: 80, reserveMax: 320, reloadTime: 2.8, spread: 0.032, pellets: 1, recoilPitch: 0.022, recoilYaw: 0.015, auto: true, price: 2200, ammoPrice: 420, knockback: 10 },
+  { id: 'dual_uzi', slot: 13, name: 'KR Market Micro-Uzi', category: 'firearm', subType: 'SMG', damage: 18, fireRate: 16.5, range: 72, magSize: 45, reserveMax: 315, reloadTime: 1.5, spread: 0.044, pellets: 1, recoilPitch: 0.012, recoilYaw: 0.014, auto: true, price: 1400, ammoPrice: 260, knockback: 3 },
+  { id: 'launcher', slot: 14, name: 'ORR Grenade Launcher', category: 'firearm', subType: 'HEAVY', damage: 135, fireRate: 0.72, range: 130, magSize: 4, reserveMax: 20, reloadTime: 2.6, spread: 0.015, pellets: 1, recoilPitch: 0.072, recoilYaw: 0.012, auto: false, price: 3200, ammoPrice: 550, knockback: 28, explosiveRadius: 6.0 },
+  { id: 'chain', slot: 15, name: 'Peenya Steel Chain', category: 'melee', subType: 'MELEE', damage: 48, fireRate: 1.4, range: 3.6, magSize: 0, reserveMax: 0, reloadTime: 0, spread: 0, pellets: 1, recoilPitch: 0, recoilYaw: 0, auto: false, price: 800, ammoPrice: 0, knockback: 14 }
 ];
 
 export interface WeaponRuntimeState {
@@ -87,6 +112,7 @@ export class WeaponSystem {
     distance: number;
   }) => void;
   public onSafeZoneBlocked?: () => void;
+  public onExplosion?: (pos: THREE.Vector3) => void;
 
   constructor(mountGroup: THREE.Group, physics: PhysicsWorld, vfx: VFXSystem) {
     this.mountGroup = mountGroup;
@@ -96,11 +122,11 @@ export class WeaponSystem {
     this.mountGroup.add(this.muzzleTip);
 
     for (const def of WEAPON_DEFS) {
-      const startsUnlocked = def.id === 'fists' || def.id === 'bat' || def.id === 'pistol';
+      const startsUnlocked = def.price === 0;
       this.states.set(def.id, {
         unlocked: startsUnlocked,
         mag: def.magSize,
-        reserve: startsUnlocked ? Math.floor(def.reserveMax * 0.6) : 0
+        reserve: startsUnlocked ? Math.floor(def.reserveMax * 0.65) : 0
       });
     }
     this.equip('pistol');
@@ -181,6 +207,19 @@ export class WeaponSystem {
       const blade = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.038, 0.24), steelMat);
       blade.position.z = -0.19;
       g.add(grip, guard, blade);
+    } else if (this.currentId === 'katana') {
+      // Sandalwood Katana: wrapped tsuka hilt, bronze tsuba guard, gleaming long blade
+      const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.28, 8), mattePolymer);
+      hilt.rotation.x = Math.PI / 2;
+      hilt.position.z = 0.06;
+      const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.014, 14), new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.25, metalness: 0.88 }));
+      tsuba.rotation.x = Math.PI / 2;
+      tsuba.position.z = -0.08;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.04, 0.88), steelMat);
+      blade.position.set(0, 0.008, -0.52);
+      const edgeGlow = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.01, 0.84), sightGlow);
+      edgeGlow.position.set(0, -0.012, -0.52);
+      g.add(hilt, tsuba, blade, edgeGlow);
     } else if (this.currentId === 'chain') {
       for (let i = 0; i < 6; i++) {
         const link = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.014, 6, 10), steelMat);
@@ -188,8 +227,7 @@ export class WeaponSystem {
         link.rotation.y = i % 2 === 0 ? 0 : Math.PI / 2;
         g.add(link);
       }
-    } else if (this.currentId === 'pistol') {
-      // Detailed Deccan 9mm Tactical Pistol (slide, barrel, frame, trigger guard, tritium sights)
+    } else if (this.currentId === 'pistol' || this.currentId === 'silenced_pistol') {
       const slide = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.056, 0.24), gunMetal);
       slide.position.set(0, 0.045, -0.085);
       const frame = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.032, 0.22), mattePolymer);
@@ -205,7 +243,41 @@ export class WeaponSystem {
       const frontSight = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.012, 0.012), sightGlow);
       frontSight.position.set(0, 0.078, -0.19);
       g.add(slide, frame, barrel, grip, guard, frontSight);
-      muzzleZ = -0.27;
+      if (this.currentId === 'silenced_pistol') {
+        const supp = new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.021, 0.22, 12), mattePolymer);
+        supp.rotation.x = Math.PI / 2;
+        supp.position.set(0, 0.044, -0.35);
+        g.add(supp);
+        muzzleZ = -0.47;
+      } else {
+        muzzleZ = -0.27;
+      }
+    } else if (this.currentId === 'deagle') {
+      // Heavy Chrome .50 Desert Eagle Hand Cannon
+      const slide = new THREE.Mesh(new THREE.BoxGeometry(0.054, 0.072, 0.31), steelMat);
+      slide.position.set(0, 0.05, -0.12);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.038, 0.28), gunMetal);
+      frame.position.set(0, 0.012, -0.1);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.14, 0.072), mattePolymer);
+      grip.position.set(0, -0.058, 0.015);
+      grip.rotation.x = 0.2;
+      const goldSight = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.016, 0.016), new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xf59e0b, emissiveIntensity: 1.5 }));
+      goldSight.position.set(0, 0.092, -0.25);
+      g.add(slide, frame, grip, goldSight);
+      muzzleZ = -0.3;
+    } else if (this.currentId === 'dual_uzi') {
+      // High-RPM KR Market Micro-Uzi with extended stick mag & folding wire stock
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.08, 0.26), gunMetal);
+      body.position.set(0, 0.048, -0.08);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.14, 8), steelMat);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.052, -0.26);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.12, 0.054), mattePolymer);
+      grip.position.set(0, -0.045, -0.02);
+      const extMag = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.25, 0.04), gunMetal);
+      extMag.position.set(0, -0.14, -0.02);
+      g.add(body, barrel, grip, extMag);
+      muzzleZ = -0.34;
     } else if (this.currentId === 'smg') {
       // Detailed Indira Compact Tactical SMG (receiver, suppressor barrel, foregrip, optic, extended mag)
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.088, 0.38), gunMetal);
@@ -268,6 +340,61 @@ export class WeaponSystem {
       stock.position.set(0, 0.035, 0.17);
       g.add(rec, handguard, barrel, grip, mag, scope, stock);
       muzzleZ = -0.79;
+    } else if (this.currentId === 'sniper') {
+      // Nandi .338 Marksman Sniper Rifle (long fluted barrel, muzzle brake, large tactical optic, bipod)
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.09, 0.44), new THREE.MeshStandardMaterial({ color: 0x3b4536, roughness: 0.65, metalness: 0.2 }));
+      chassis.position.set(0, 0.045, -0.18);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.018, 0.64, 10), gunMetal);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.062, -0.68);
+      const brake = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.034, 0.08), steelMat);
+      brake.position.set(0, 0.062, -1.02);
+      const scopeTube = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 0.34, 12), mattePolymer);
+      scopeTube.rotation.x = Math.PI / 2;
+      scopeTube.position.set(0, 0.135, -0.18);
+      const lensGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.01, 12), new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0ea5e9, emissiveIntensity: 1.4 }));
+      lensGlow.rotation.x = Math.PI / 2;
+      lensGlow.position.set(0, 0.135, -0.355);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.12, 0.056), mattePolymer);
+      grip.position.set(0, -0.042, 0.02);
+      grip.rotation.x = 0.22;
+      const stock = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.11, 0.32), mattePolymer);
+      stock.position.set(0, 0.03, 0.22);
+      g.add(chassis, barrel, brake, scopeTube, lensGlow, grip, stock);
+      muzzleZ = -1.08;
+    } else if (this.currentId === 'lmg') {
+      // Peenya M249 Heavy Squad LMG with green ammo box drum & heat-shroud barrel
+      const rec = new THREE.Mesh(new THREE.BoxGeometry(0.088, 0.115, 0.44), gunMetal);
+      rec.position.set(0, 0.055, -0.16);
+      const shroud = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.42, 10), mattePolymer);
+      shroud.rotation.x = Math.PI / 2;
+      shroud.position.set(0, 0.062, -0.58);
+      const ammoBox = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.16, 0.16), new THREE.MeshStandardMaterial({ color: 0x3f5436, roughness: 0.72 }));
+      ammoBox.position.set(0, -0.075, -0.18);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.12, 0.058), mattePolymer);
+      grip.position.set(0, -0.045, 0.04);
+      grip.rotation.x = 0.22;
+      const stock = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.11, 0.26), mattePolymer);
+      stock.position.set(0, 0.04, 0.2);
+      g.add(rec, shroud, ammoBox, grip, stock);
+      muzzleZ = -0.82;
+    } else if (this.currentId === 'launcher') {
+      // ORR Tactical 40mm Revolving Grenade Launcher
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.48, 12), gunMetal);
+      tube.rotation.x = Math.PI / 2;
+      tube.position.set(0, 0.062, -0.42);
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.088, 0.19, 14), mattePolymer);
+      drum.rotation.x = Math.PI / 2;
+      drum.position.set(0, 0.048, -0.12);
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.008, 6, 14), new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xea580c, emissiveIntensity: 1.0 }));
+      band.position.set(0, 0.062, -0.62);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.125, 0.058), mattePolymer);
+      grip.position.set(0, -0.05, 0.04);
+      grip.rotation.x = 0.2;
+      const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.26), mattePolymer);
+      stock.position.set(0, 0.035, 0.19);
+      g.add(tube, drum, band, grip, stock);
+      muzzleZ = -0.68;
     }
 
     this.muzzleTip.position.set(0, 0.05, muzzleZ);
@@ -511,9 +638,23 @@ export class WeaponSystem {
         }
       }
 
-      this.vfx.spawnTracer(muzzlePos, hitPoint);
+      this.vfx.spawnTracer(muzzlePos, hitPoint, def.explosiveRadius ? 0xff7b29 : 0xffd97d);
 
-      if (hitTarget) {
+      if (def.explosiveRadius) {
+        // Explosive splash damage + dramatic spark/fireball burst!
+        this.vfx.spawnSparks(hitPoint, new THREE.Vector3(0, 1, 0), 28, 0xff6b2b);
+        this.vfx.spawnSparks(hitPoint, new THREE.Vector3(0, 1, 0), 16, 0xffe066);
+        this.onExplosion?.(hitPoint);
+        for (const t of targets) {
+          const distExp = t.position.distanceTo(hitPoint);
+          if (distExp <= def.explosiveRadius) {
+            const falloff = 1 - (distExp / def.explosiveRadius) * 0.55;
+            const blastDir = t.position.clone().sub(hitPoint).setY(0.4).normalize();
+            t.applyHit(def.damage * falloff, blastDir, def.knockback * falloff, false);
+            anyHit = true;
+          }
+        }
+      } else if (hitTarget) {
         const dmg = def.damage * (headshot ? 2.1 * this.headshotDamageMult : 1.0);
         hitTarget.applyHit(dmg, dir, def.knockback, headshot);
         this.vfx.spawnSparks(hitPoint, dir.clone().negate(), headshot ? 10 : 5, headshot ? 0xff4757 : 0xffc857);

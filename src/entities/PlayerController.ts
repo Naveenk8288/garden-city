@@ -126,12 +126,31 @@ export class PlayerController {
     // Apply Free Fire-style Character Preset Passive Stats!
     this.maxHealth = loadout.presetId === 'rudra_ops' ? 135 : 100;
     this.maxArmor = loadout.presetId === 'zoya_viper' ? 130 : 100;
-    this.sprintMult = loadout.presetId === 'kavya_shadow' ? 1.18 : loadout.presetId === 'kaal_dj' ? 1.1 : 1.0;
+    this.sprintMult =
+      loadout.presetId === 'kavya_shadow' ? 1.18 :
+      loadout.presetId === 'aura_seraph' ? 1.15 :
+      loadout.presetId === 'kaal_dj' ? 1.1 : 1.0;
     this.incomingDamageMult = loadout.presetId === 'rudra_ops' ? 0.85 : 1.0;
     this.health = Math.min(this.maxHealth, Math.max(this.health, this.maxHealth * 0.85));
     this.armor = Math.min(this.maxArmor, this.armor);
 
     return this.weaponMount;
+  }
+
+  private animateWingsAndRibbon(t: number, speedScale: number): void {
+    const flap = Math.sin(t * (2.2 + speedScale * 1.4)) * (0.14 + speedScale * 0.12);
+    if (this.rig.leftWing) {
+      this.rig.leftWing.rotation.y = 0.22 + flap;
+      this.rig.leftWing.rotation.z = flap * 0.45;
+    }
+    if (this.rig.rightWing) {
+      this.rig.rightWing.rotation.y = -(0.22 + flap);
+      this.rig.rightWing.rotation.z = -flap * 0.45;
+    }
+    if (this.rig.ribbonTail) {
+      this.rig.ribbonTail.rotation.x = 0.12 + speedScale * 0.35 + Math.sin(t * 3.1) * 0.1;
+      this.rig.ribbonTail.rotation.z = Math.cos(t * 2.4) * 0.12;
+    }
   }
 
   public updateVaultShowcase(dt: number, camera: THREE.PerspectiveCamera): void {
@@ -156,6 +175,7 @@ export class PlayerController {
     this.rig.rightShoulder.rotation.set(0.06, 0, -0.14);
     this.rig.rightElbow.rotation.set(0.18, 0, 0);
     this.rig.rightWrist.rotation.set(0, 0, 0);
+    this.animateWingsAndRibbon(this.animPhase, 0.15);
 
     // Frame full-body character cleanly on the left side of the viewport (right half hosts Vault panel!)
     const camDist = 2.95;
@@ -656,6 +676,9 @@ export class PlayerController {
       lerpJoint(this.rig.rightElbow, 0.16, 0, 0, 12);
       lerpJoint(this.rig.rightWrist, 0, 0, 0, 12);
     }
+
+    // Gently flutter Seraph dove wings & flowing crimson ribbon while exploring Bengaluru!
+    this.animateWingsAndRibbon(performance.now() * 0.001, Math.min(1, this.stance.speed / 8));
   }
 
   private updateCamera(dt: number, camera: THREE.PerspectiveCamera): void {

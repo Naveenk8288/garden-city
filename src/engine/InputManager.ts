@@ -188,9 +188,12 @@ export class InputManager {
     }
 
     let weaponSlotPressed = 0;
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 1; i <= 9; i++) {
       if (this.justPressed.has(`Digit${i}`)) weaponSlotPressed = i;
     }
+    if (this.justPressed.has('Digit0')) weaponSlotPressed = 10;
+    if (this.justPressed.has('Minus')) weaponSlotPressed = 11;
+    if (this.justPressed.has('Equal')) weaponSlotPressed = 12;
 
     const state: InputState = {
       moveX,

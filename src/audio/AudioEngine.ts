@@ -23,6 +23,7 @@ export class AudioEngine {
   private ambientTimer = 4;
   private radioStepTimer = 0;
   private radioStep = 0;
+  private railClackTimer = 0;
 
   public init(): void {
     if (this.initialized) {
@@ -103,8 +104,36 @@ export class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
 
-    // White noise punch
-    const dur = weaponId === 'shotgun' ? 0.24 : weaponId === 'rifle' ? 0.16 : 0.11;
+    if (weaponId === 'silenced_pistol') {
+      // Crisp suppressed "thwip" shot
+      const dur = 0.08;
+      const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.22));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buf;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(2400, t);
+      filt.frequency.exponentialRampToValueAtTime(520, t + dur);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.18 * volumeScale, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      noise.connect(filt);
+      filt.connect(g);
+      g.connect(this.masterGain);
+      noise.start(t);
+      return;
+    }
+
+    // White noise punch tailored per weapon class
+    const dur =
+      weaponId === 'sniper' ? 0.34 :
+      weaponId === 'launcher' ? 0.26 :
+      weaponId === 'shotgun' || weaponId === 'deagle' ? 0.24 :
+      weaponId === 'rifle' || weaponId === 'lmg' ? 0.16 : 0.11;
     const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) {
@@ -115,11 +144,18 @@ export class AudioEngine {
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(weaponId === 'shotgun' ? 1100 : weaponId === 'smg' ? 2800 : 1900, t);
-    filter.frequency.exponentialRampToValueAtTime(220, t + dur);
+    const startFreq =
+      weaponId === 'launcher' ? 680 :
+      weaponId === 'shotgun' ? 1100 :
+      weaponId === 'deagle' ? 1450 :
+      weaponId === 'sniper' ? 3200 :
+      weaponId === 'smg' || weaponId === 'dual_uzi' ? 2900 : 1900;
+    filter.frequency.setValueAtTime(startFreq, t);
+    filter.frequency.exponentialRampToValueAtTime(200, t + dur);
 
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.36 * volumeScale, t);
+    const loud = weaponId === 'sniper' || weaponId === 'deagle' ? 0.46 : 0.36;
+    g.gain.setValueAtTime(loud * volumeScale, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
 
     noise.connect(filter);
@@ -130,15 +166,53 @@ export class AudioEngine {
     // Low bass thump
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(weaponId === 'shotgun' ? 130 : 180, t);
-    osc.frequency.exponentialRampToValueAtTime(38, t + 0.09);
+    const bassStart = weaponId === 'launcher' ? 95 : weaponId === 'deagle' || weaponId === 'sniper' ? 115 : weaponId === 'shotgun' ? 130 : 180;
+    osc.frequency.setValueAtTime(bassStart, t);
+    osc.frequency.exponentialRampToValueAtTime(32, t + (weaponId === 'sniper' ? 0.16 : 0.09));
     const og = this.ctx.createGain();
-    og.gain.setValueAtTime(0.3 * volumeScale, t);
-    og.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    og.gain.setValueAtTime((weaponId === 'launcher' || weaponId === 'deagle' || weaponId === 'sniper' ? 0.42 : 0.3) * volumeScale, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + (weaponId === 'sniper' ? 0.17 : 0.095));
     osc.connect(og);
     og.connect(this.masterGain);
     osc.start(t);
-    osc.stop(t + 0.1);
+    osc.stop(t + 0.18);
+  }
+
+  public playExplosion(distance = 0): void {
+    if (!this.ctx) return;
+    const atten = Math.max(0.08, 1 - distance / 140);
+    const t = this.ctx.currentTime;
+    const dur = 0.72;
+    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.32));
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buf;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(780, t);
+    filt.frequency.exponentialRampToValueAtTime(80, t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.62 * atten, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    noise.connect(filt);
+    filt.connect(g);
+    g.connect(this.masterGain);
+    noise.start(t);
+
+    const sub = this.ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(92, t);
+    sub.frequency.exponentialRampToValueAtTime(22, t + 0.45);
+    const sg = this.ctx.createGain();
+    sg.gain.setValueAtTime(0.55 * atten, t);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 0.48);
+    sub.connect(sg);
+    sg.connect(this.masterGain);
+    sub.start(t);
+    sub.stop(t + 0.5);
   }
 
   public playMeleeSwing(): void {
@@ -363,7 +437,9 @@ export class AudioEngine {
     vehicleKind: string,
     wantedStars: number,
     nearSafeZone: boolean,
-    radio: RadioStation
+    radio: RadioStation,
+    inMetro = false,
+    metroSpeedKmh = 0
   ): void {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
@@ -371,8 +447,19 @@ export class AudioEngine {
     // Scale monsoon tin-roof rain sound smoothly
     this.rainGain.gain.setTargetAtTime(0.015 + rainIntensity * 0.22, t, 0.2);
 
-    // Vehicle engine hum (2-stroke auto putter vs smooth car)
-    if (inVehicle) {
+    // Vehicle engine hum OR Namma Metro electric traction hum + rail clack!
+    if (inMetro) {
+      const metroHz = 82 + metroSpeedKmh * 1.35;
+      this.engineOsc.frequency.setTargetAtTime(metroHz, t, 0.1);
+      this.engineGain.gain.setTargetAtTime(metroSpeedKmh > 2 ? 0.048 : 0.012, t, 0.12);
+      if (metroSpeedKmh > 12) {
+        this.railClackTimer -= dt;
+        if (this.railClackTimer <= 0) {
+          this.railClackTimer = Math.max(0.28, 1.35 - metroSpeedKmh * 0.008);
+          this.playRailClack();
+        }
+      }
+    } else if (inVehicle) {
       const baseFreq = vehicleKind === 'auto' ? 78 : vehicleKind === 'bike' ? 92 : 55;
       const freq = baseFreq + vehicleSpeedKmh * (vehicleKind === 'bike' ? 1.85 : 1.15);
       this.engineOsc.frequency.setTargetAtTime(freq, t, 0.08);
@@ -412,6 +499,25 @@ export class AudioEngine {
         else if (r < 0.72) this.playHorn('auto', 42);
         else this.playTempleBell();
       }
+    }
+  }
+
+  private playRailClack(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Rhythmic double "ka-chunk" rail joint sound
+    for (const off of [0, 0.09]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(140, t + off);
+      osc.frequency.exponentialRampToValueAtTime(48, t + off + 0.055);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.065, t + off);
+      g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.06);
+      osc.connect(g);
+      g.connect(this.masterGain);
+      osc.start(t + off);
+      osc.stop(t + off + 0.065);
     }
   }
 
