@@ -1,5 +1,7 @@
 import { gameBus } from '../core/EventBus';
-import { gdIconHTML, GD_PALETTE } from '../ui/GDIcon';
+import { createGDIconElement, GD_PALETTE } from '../ui/GDIcon';
+import { clearChildren, el } from '../security/SafeDOM';
+import { safeStorageGet, safeStorageSet } from '../security/PrivacyManager';
 import { ZoneId } from '../world/bengaluruData';
 import {
   CAMPAIGN_CHAPTERS,
@@ -248,56 +250,83 @@ export class CampaignManager {
   }
 
   private createJournalDOM(): void {
-    this.modalEl = document.createElement('div');
-    this.modalEl.id = 'gd-story-modal';
-    this.modalEl.className = 'modal-overlay hidden';
-    this.modalEl.innerHTML = `
-      <div class="gd-story-panel">
-        <div class="panel-header">
-          <div>
-            <h2>${gdIconHTML('story', 22, GD_PALETTE.amber)} STORY CAMPAIGN • 8 CHAPTERS</h2>
-            <span class="panel-sub">Phase A • Choices shape Loyalty vs. Power and unlock two distinct Bengaluru endings</span>
-          </div>
-          <button id="gd-story-close" class="btn-close">✕ [J]</button>
-        </div>
-        <div id="gd-rep-bar" class="gd-rep-bar"></div>
-        <div class="gd-story-tabs">
-          <button class="gd-stab active" data-tab="chapters">${gdIconHTML('story', 14, GD_PALETTE.cyan)} 8 CHAPTERS</button>
-          <button class="gd-stab" data-tab="cast">${gdIconHTML('boss', 14, GD_PALETTE.pink)} CAST (12 CHARACTERS)</button>
-        </div>
-        <div id="gd-story-body" class="gd-story-body"></div>
-      </div>
-    `;
-    document.body.appendChild(this.modalEl);
+    const tabChapters = el(
+      'button',
+      { className: 'gd-stab active', attrs: { 'data-tab': 'chapters' } },
+      createGDIconElement('story', 14, GD_PALETTE.cyan),
+      ' 8 CHAPTERS'
+    );
+    const tabCast = el(
+      'button',
+      { className: 'gd-stab', attrs: { 'data-tab': 'cast' } },
+      createGDIconElement('boss', 14, GD_PALETTE.pink),
+      ' CAST (12 CHARACTERS)'
+    );
 
-    this.modalEl.querySelector('#gd-story-close')?.addEventListener('click', () => this.toggleJournal(false));
-    this.modalEl.querySelectorAll('.gd-stab').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        this.modalEl!.querySelectorAll('.gd-stab').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.renderJournal((btn as HTMLElement).dataset.tab as 'chapters' | 'cast');
-      });
-    });
+    const activateTab = (tab: 'chapters' | 'cast') => {
+      tabChapters.classList.toggle('active', tab === 'chapters');
+      tabCast.classList.toggle('active', tab === 'cast');
+      this.renderJournal(tab);
+    };
+    tabChapters.addEventListener('click', () => activateTab('chapters'));
+    tabCast.addEventListener('click', () => activateTab('cast'));
+
+    this.modalEl = el(
+      'div',
+      { id: 'gd-story-modal', className: 'modal-overlay hidden' },
+      el(
+        'div',
+        { className: 'gd-story-panel' },
+        el(
+          'div',
+          { className: 'panel-header' },
+          el(
+            'div',
+            {},
+            el('h2', {}, createGDIconElement('story', 22, GD_PALETTE.amber), ' STORY CAMPAIGN • 8 CHAPTERS'),
+            el('span', {
+              className: 'panel-sub',
+              text: 'Phase A • Choices shape Loyalty vs. Power and unlock two distinct Bengaluru endings'
+            })
+          ),
+          el('button', {
+            id: 'gd-story-close',
+            className: 'btn-close',
+            text: '✕ [J]',
+            onClick: () => this.toggleJournal(false)
+          })
+        ),
+        el('div', { id: 'gd-rep-bar', className: 'gd-rep-bar' }),
+        el('div', { className: 'gd-story-tabs' }, tabChapters, tabCast),
+        el('div', { id: 'gd-story-body', className: 'gd-story-body' })
+      )
+    );
+    document.body.appendChild(this.modalEl);
   }
 
   private createEndingDOM(): void {
-    this.endingModalEl = document.createElement('div');
-    this.endingModalEl.id = 'gd-ending-modal';
-    this.endingModalEl.className = 'modal-overlay hidden';
-    this.endingModalEl.innerHTML = `
-      <div class="gd-ending-card">
-        <div id="gd-end-kicker" class="gd-end-kicker"></div>
-        <h2 id="gd-end-title"></h2>
-        <p id="gd-end-body"></p>
-        <div id="gd-end-stats" class="gd-end-stats"></div>
-        <button id="gd-end-continue" class="gd-btn-cyan">CONTINUE FREE ROAM IN BENGALURU</button>
-      </div>
-    `;
+    this.endingModalEl = el(
+      'div',
+      { id: 'gd-ending-modal', className: 'modal-overlay hidden' },
+      el(
+        'div',
+        { className: 'gd-ending-card' },
+        el('div', { id: 'gd-end-kicker', className: 'gd-end-kicker' }),
+        el('h2', { id: 'gd-end-title' }),
+        el('p', { id: 'gd-end-body' }),
+        el('div', { id: 'gd-end-stats', className: 'gd-end-stats' }),
+        el('button', {
+          id: 'gd-end-continue',
+          className: 'gd-btn-cyan',
+          text: 'CONTINUE FREE ROAM IN BENGALURU',
+          onClick: () => {
+            this.endingModalEl?.classList.add('hidden');
+            this.onSyncUIBlock?.();
+          }
+        })
+      )
+    );
     document.body.appendChild(this.endingModalEl);
-    this.endingModalEl.querySelector('#gd-end-continue')?.addEventListener('click', () => {
-      this.endingModalEl?.classList.add('hidden');
-      this.onSyncUIBlock?.();
-    });
   }
 
   private showEndingCard(endingType: 'loyalty' | 'power'): void {
@@ -307,13 +336,29 @@ export class CampaignManager {
     const title = this.endingModalEl.querySelector('#gd-end-title')!;
     const body = this.endingModalEl.querySelector('#gd-end-body')!;
     const stats = this.endingModalEl.querySelector('#gd-end-stats')!;
-    kicker.innerHTML = `${gdIconHTML(endingType === 'loyalty' ? 'loyalty' : 'power', 18, endingType === 'loyalty' ? GD_PALETTE.cyan : GD_PALETTE.pink)} ${def.subtitle}`;
+    clearChildren(kicker);
+    kicker.append(
+      createGDIconElement(
+        endingType === 'loyalty' ? 'loyalty' : 'power',
+        18,
+        endingType === 'loyalty' ? GD_PALETTE.cyan : GD_PALETTE.pink
+      ),
+      ` ${def.subtitle}`
+    );
     title.textContent = def.title;
     body.textContent =
       this.language === 'kn' ? `${def.epilogue.kn} (${def.epilogue.en})` :
       this.language === 'hi' ? `${def.epilogue.hi} (${def.epilogue.en})` :
       def.epilogue.en;
-    stats.innerHTML = `LOYALTY: <b style="color:${GD_PALETTE.cyan}">${this.loyalty}</b> &nbsp;•&nbsp; POWER: <b style="color:${GD_PALETTE.pink}">${this.power}</b> &nbsp;•&nbsp; CHAPTERS: <b>${this.completedChapterIds.size}/8</b>`;
+    clearChildren(stats);
+    stats.append(
+      'LOYALTY: ',
+      el('b', { text: String(this.loyalty), style: { color: GD_PALETTE.cyan } }),
+      ' • POWER: ',
+      el('b', { text: String(this.power), style: { color: GD_PALETTE.pink } }),
+      ' • CHAPTERS: ',
+      el('b', { text: `${this.completedChapterIds.size}/8` })
+    );
     this.endingModalEl.classList.remove('hidden');
   }
 
@@ -325,80 +370,118 @@ export class CampaignManager {
     const predicted = this.getEndingType();
 
     const repEl = this.modalEl.querySelector('#gd-rep-bar')!;
-    repEl.innerHTML = `
-      <div class="gd-rep-labels">
-        <span style="color:${GD_PALETTE.cyan}">${gdIconHTML('loyalty', 14, GD_PALETTE.cyan)} LOYALTY ${this.loyalty} (${lPct}%)</span>
-        <span style="color:${GD_PALETTE.amber}">ENDING PATH: <b>${predicted === 'loyalty' ? 'PROTECTOR OF GARDEN CITY' : 'SILICON UNDERWORLD EMPEROR'}</b></span>
-        <span style="color:${GD_PALETTE.pink}">POWER ${this.power} (${pPct}%) ${gdIconHTML('power', 14, GD_PALETTE.pink)}</span>
-      </div>
-      <div class="gd-rep-track">
-        <div class="gd-rep-l" style="width:${lPct}%"></div>
-        <div class="gd-rep-p" style="width:${pPct}%"></div>
-      </div>
-    `;
+    clearChildren(repEl);
+    repEl.append(
+      el(
+        'div',
+        { className: 'gd-rep-labels' },
+        el('span', { style: { color: GD_PALETTE.cyan } }, createGDIconElement('loyalty', 14, GD_PALETTE.cyan), ` LOYALTY ${this.loyalty} (${lPct}%)`),
+        el(
+          'span',
+          { style: { color: GD_PALETTE.amber } },
+          'ENDING PATH: ',
+          el('b', { text: predicted === 'loyalty' ? 'PROTECTOR OF GARDEN CITY' : 'SILICON UNDERWORLD EMPEROR' })
+        ),
+        el('span', { style: { color: GD_PALETTE.pink } }, `POWER ${this.power} (${pPct}%) `, createGDIconElement('power', 14, GD_PALETTE.pink))
+      ),
+      el(
+        'div',
+        { className: 'gd-rep-track' },
+        el('div', { className: 'gd-rep-l', style: { width: `${lPct}%` } }),
+        el('div', { className: 'gd-rep-p', style: { width: `${pPct}%` } })
+      )
+    );
 
     const body = this.modalEl.querySelector('#gd-story-body')!;
-    body.innerHTML = '';
+    clearChildren(body);
 
     if (tab === 'cast') {
-      const grid = document.createElement('div');
-      grid.className = 'gd-cast-grid';
+      const grid = el('div', { className: 'gd-cast-grid' });
       for (const c of STORY_CHARACTERS) {
-        const card = document.createElement('div');
-        card.className = 'gd-cast-card';
-        card.style.borderLeftColor = c.accentColor;
         const bio = this.language === 'kn' ? c.bio.kn : this.language === 'hi' ? c.bio.hi : c.bio.en;
-        card.innerHTML = `
-          <div class="gd-cast-role" style="color:${c.accentColor}">${c.roleLabel}</div>
-          <div class="gd-cast-name">${c.name} <small>"${c.alias}"</small></div>
-          <div class="gd-cast-bio">${bio}</div>
-        `;
-        grid.appendChild(card);
+        grid.appendChild(
+          el(
+            'div',
+            { className: 'gd-cast-card', style: { borderLeftColor: c.accentColor } },
+            el('div', { className: 'gd-cast-role', text: c.roleLabel, style: { color: c.accentColor } }),
+            el('div', { className: 'gd-cast-name' }, `${c.name} `, el('small', { text: `"${c.alias}"` })),
+            el('div', { className: 'gd-cast-bio', text: bio })
+          )
+        );
       }
       body.appendChild(grid);
       return;
     }
 
-    const list = document.createElement('div');
-    list.className = 'gd-chapter-grid';
+    const list = el('div', { className: 'gd-chapter-grid' });
     for (const ch of CAMPAIGN_CHAPTERS) {
       const doneCount = ch.missions.filter((m) => this.completedMissionIds.has(m.id)).length;
       const done = this.completedChapterIds.has(ch.id);
       const boss = STORY_CHARACTERS.find((c) => c.id === ch.bossId);
-      const card = document.createElement('div');
-      card.className = `gd-chapter-card${done ? ' done' : ''}`;
-      card.innerHTML = `
-        <div class="gd-ch-top">
-          <span class="gd-ch-num">CH ${ch.number} • ${ch.zone.toUpperCase()}</span>
-          <span class="gd-ch-prog">${done ? '✓ CLAIMED' : `${doneCount}/${ch.missions.length} MISSIONS`}</span>
-        </div>
-        <div class="gd-ch-title">${ch.title}</div>
-        <div class="gd-ch-kn">${ch.titleKn}</div>
-        <div class="gd-ch-boss">${gdIconHTML('boss', 13, GD_PALETTE.pink)} Boss: ${boss?.name} "${boss?.alias}"</div>
-        <div class="gd-ch-actions">
-          <button class="gd-mini-btn act-play">${gdIconHTML('gun', 12, GD_PALETTE.cyan)} Play Chapter</button>
-          <button class="gd-mini-btn act-cut">${gdIconHTML('cutscene', 12, GD_PALETTE.amber)} Cutscene</button>
-          <button class="gd-mini-btn act-dlg">${gdIconHTML('dialogue', 12, GD_PALETTE.pink)} Choice</button>
-        </div>
-      `;
-      card.querySelector('.act-play')?.addEventListener('click', () => {
-        const targetM = ch.missions.find((m) => !this.completedMissionIds.has(m.id)) || ch.missions[0];
-        this.toggleJournal(false);
-        this.launchMissionInternal(targetM);
-      });
-      card.querySelector('.act-cut')?.addEventListener('click', () => {
-        this.toggleJournal(false);
-        this.cutscenes?.play(ch.introCutscene, () => this.onSyncUIBlock?.());
-        this.onSyncUIBlock?.();
-      });
-      card.querySelector('.act-dlg')?.addEventListener('click', () => {
-        this.toggleJournal(false);
-        this.dialogue?.open(ch.dialogue, (choice) => {
-          if (choice) this.applyDialogueChoice(choice);
-          this.onSyncUIBlock?.();
-        });
-        this.onSyncUIBlock?.();
-      });
+      const card = el(
+        'div',
+        { className: `gd-chapter-card${done ? ' done' : ''}` },
+        el(
+          'div',
+          { className: 'gd-ch-top' },
+          el('span', { className: 'gd-ch-num', text: `CH ${ch.number} • ${ch.zone.toUpperCase()}` }),
+          el('span', { className: 'gd-ch-prog', text: done ? '✓ CLAIMED' : `${doneCount}/${ch.missions.length} MISSIONS` })
+        ),
+        el('div', { className: 'gd-ch-title', text: ch.title }),
+        el('div', { className: 'gd-ch-kn', text: ch.titleKn }),
+        el(
+          'div',
+          { className: 'gd-ch-boss' },
+          createGDIconElement('boss', 13, GD_PALETTE.pink),
+          ` Boss: ${boss?.name ?? ''} "${boss?.alias ?? ''}"`
+        ),
+        el(
+          'div',
+          { className: 'gd-ch-actions' },
+          el(
+            'button',
+            {
+              className: 'gd-mini-btn act-play',
+              onClick: () => {
+                const targetM = ch.missions.find((m) => !this.completedMissionIds.has(m.id)) || ch.missions[0];
+                this.toggleJournal(false);
+                this.launchMissionInternal(targetM);
+              }
+            },
+            createGDIconElement('gun', 12, GD_PALETTE.cyan),
+            ' Play Chapter'
+          ),
+          el(
+            'button',
+            {
+              className: 'gd-mini-btn act-cut',
+              onClick: () => {
+                this.toggleJournal(false);
+                this.cutscenes?.play(ch.introCutscene, () => this.onSyncUIBlock?.());
+                this.onSyncUIBlock?.();
+              }
+            },
+            createGDIconElement('cutscene', 12, GD_PALETTE.amber),
+            ' Cutscene'
+          ),
+          el(
+            'button',
+            {
+              className: 'gd-mini-btn act-dlg',
+              onClick: () => {
+                this.toggleJournal(false);
+                this.dialogue?.open(ch.dialogue, (choice) => {
+                  if (choice) this.applyDialogueChoice(choice);
+                  this.onSyncUIBlock?.();
+                });
+                this.onSyncUIBlock?.();
+              }
+            },
+            createGDIconElement('dialogue', 12, GD_PALETTE.pink),
+            ' Choice'
+          )
+        )
+      );
       list.appendChild(card);
     }
     body.appendChild(list);
@@ -425,19 +508,12 @@ export class CampaignManager {
   }
 
   public save(): void {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(CAMPAIGN_SAVE_KEY, JSON.stringify(this.toSnapshot()));
-      }
-    } catch {
-      // ignore storage errors
-    }
+    safeStorageSet(CAMPAIGN_SAVE_KEY, JSON.stringify(this.toSnapshot()));
   }
 
   public load(): void {
     try {
-      if (typeof localStorage === 'undefined') return;
-      const raw = localStorage.getItem(CAMPAIGN_SAVE_KEY);
+      const raw = safeStorageGet(CAMPAIGN_SAVE_KEY);
       if (!raw) return;
       this.loadSnapshot(JSON.parse(raw));
     } catch {

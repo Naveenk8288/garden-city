@@ -169,7 +169,7 @@ export function buildNPCCharacter(
       const wep = new THREE.Group();
       wep.position.set(0, -0.56, -0.04);
       wep.rotation.x = -Math.PI / 2;
-      let muzzleZ = -0.34;
+      let muzzleZ: number;
 
       if (archetype === 'grunt') {
         // Real 9mm Street Pistol (slide, steel barrel, polymer frame & grip) so every rival carries a real gun!

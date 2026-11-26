@@ -1,3 +1,5 @@
+import { el } from '../security/SafeDOM';
+
 export interface TouchInputState {
   moveX: number;
   moveZ: number;
@@ -69,35 +71,41 @@ export class TouchControlsUI {
       typeof window !== 'undefined' &&
       ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.matchMedia?.('(pointer: coarse)')?.matches);
 
-    this.root = document.createElement('div');
-    this.root.id = 'touch-controls';
-    this.root.className = 'touch-controls hidden';
-    this.root.innerHTML = `
-      <div id="touch-look-zone" class="touch-look-zone"></div>
-      <div class="touch-top-bar">
-        <button class="touch-pill-btn" data-tap="map">MAP</button>
-        <button class="touch-pill-btn" data-tap="metro">METRO</button>
-        <button class="touch-pill-btn" data-hold="weaponWheel">GUNS</button>
-        <button class="touch-pill-btn" data-tap="pause">☰ MENU</button>
-      </div>
-      <div id="touch-stick-base" class="touch-stick-base">
-        <div id="touch-stick-knob" class="touch-stick-knob"></div>
-      </div>
-      <div class="touch-action-pad">
-        <button id="touch-btn-use" class="touch-btn touch-btn-use" data-tap="interact">USE</button>
-        <button class="touch-btn touch-btn-aim" data-hold="aim">AIM</button>
-        <button class="touch-btn touch-btn-jump" data-tap="jump" data-hold="handbrake">JUMP</button>
-        <button class="touch-btn touch-btn-reload" data-tap="reload">RLD</button>
-        <button class="touch-btn touch-btn-holster" data-tap="holster">DRAW</button>
-        <button class="touch-btn touch-btn-fire" data-hold="fire">FIRE</button>
-      </div>
-    `;
-    document.body.appendChild(this.root);
+    this.lookZone = el('div', { id: 'touch-look-zone', className: 'touch-look-zone' });
+    this.stickKnob = el('div', { id: 'touch-stick-knob', className: 'touch-stick-knob' });
+    this.stickBase = el('div', { id: 'touch-stick-base', className: 'touch-stick-base' }, this.stickKnob);
+    this.useBtn = el('button', {
+      id: 'touch-btn-use',
+      className: 'touch-btn touch-btn-use',
+      text: 'USE',
+      attrs: { 'data-tap': 'interact' }
+    });
 
-    this.stickBase = this.root.querySelector('#touch-stick-base') as HTMLDivElement;
-    this.stickKnob = this.root.querySelector('#touch-stick-knob') as HTMLDivElement;
-    this.lookZone = this.root.querySelector('#touch-look-zone') as HTMLDivElement;
-    this.useBtn = this.root.querySelector('#touch-btn-use') as HTMLButtonElement;
+    this.root = el(
+      'div',
+      { id: 'touch-controls', className: 'touch-controls hidden' },
+      this.lookZone,
+      el(
+        'div',
+        { className: 'touch-top-bar' },
+        el('button', { className: 'touch-pill-btn', text: 'MAP', attrs: { 'data-tap': 'map' } }),
+        el('button', { className: 'touch-pill-btn', text: 'METRO', attrs: { 'data-tap': 'metro' } }),
+        el('button', { className: 'touch-pill-btn', text: 'GUNS', attrs: { 'data-hold': 'weaponWheel' } }),
+        el('button', { className: 'touch-pill-btn', text: '☰ MENU', attrs: { 'data-tap': 'pause' } })
+      ),
+      this.stickBase,
+      el(
+        'div',
+        { className: 'touch-action-pad' },
+        this.useBtn,
+        el('button', { className: 'touch-btn touch-btn-aim', text: 'AIM', attrs: { 'data-hold': 'aim' } }),
+        el('button', { className: 'touch-btn touch-btn-jump', text: 'JUMP', attrs: { 'data-tap': 'jump', 'data-hold': 'handbrake' } }),
+        el('button', { className: 'touch-btn touch-btn-reload', text: 'RLD', attrs: { 'data-tap': 'reload' } }),
+        el('button', { className: 'touch-btn touch-btn-holster', text: 'DRAW', attrs: { 'data-tap': 'holster' } }),
+        el('button', { className: 'touch-btn touch-btn-fire', text: 'FIRE', attrs: { 'data-hold': 'fire' } })
+      )
+    );
+    document.body.appendChild(this.root);
 
     this.bindJoystick();
     this.bindLookPad();

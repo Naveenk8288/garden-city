@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { latLonToWorld } from '../world/bengaluruData';
 import { gameBus } from '../core/EventBus';
-import { gdIconHTML, GD_PALETTE } from '../ui/GDIcon';
+import { createGDIconElement, GD_PALETTE } from '../ui/GDIcon';
+import { el } from '../security/SafeDOM';
 import { CutsceneDef, StoryLanguage } from './StoryData';
 
 /**
@@ -31,34 +32,40 @@ export class CutsceneManager {
   private currentLookAt = new THREE.Vector3();
 
   constructor() {
-    this.overlayEl = document.createElement('div');
-    this.overlayEl.id = 'gd-cutscene-overlay';
-    this.overlayEl.className = 'gd-cutscene-overlay hidden';
-    this.overlayEl.innerHTML = `
-      <div class="gd-letterbox gd-lb-top">
-        <div class="gd-cut-badge">
-          ${gdIconHTML('cutscene', 16, GD_PALETTE.amber)}
-          <span id="gd-cut-title">CHAPTER 1</span>
-          <span class="gd-cut-dot">•</span>
-          <span id="gd-cut-sub">GARDEN CITY UNDERWORLD</span>
-        </div>
-        <button id="gd-cut-skip" class="gd-skip-btn">
-          ${gdIconHTML('skip', 14, GD_PALETTE.pink)} SKIP CUTSCENE [Space]
-        </button>
-      </div>
-      <div class="gd-letterbox gd-lb-bot">
-        <div id="gd-cut-caption" class="gd-cut-caption"></div>
-        <div class="gd-cut-bar"><div id="gd-cut-fill" class="gd-cut-fill"></div></div>
-      </div>
-    `;
+    this.titleEl = el('span', { id: 'gd-cut-title', text: 'CHAPTER 1' });
+    this.subEl = el('span', { id: 'gd-cut-sub', text: 'GARDEN CITY UNDERWORLD' });
+    this.captionEl = el('div', { id: 'gd-cut-caption', className: 'gd-cut-caption' });
+    this.barFillEl = el('div', { id: 'gd-cut-fill', className: 'gd-cut-fill' });
+
+    this.overlayEl = el(
+      'div',
+      { id: 'gd-cutscene-overlay', className: 'gd-cutscene-overlay hidden' },
+      el(
+        'div',
+        { className: 'gd-letterbox gd-lb-top' },
+        el(
+          'div',
+          { className: 'gd-cut-badge' },
+          createGDIconElement('cutscene', 16, GD_PALETTE.amber),
+          this.titleEl,
+          el('span', { className: 'gd-cut-dot', text: '•' }),
+          this.subEl
+        ),
+        el(
+          'button',
+          { id: 'gd-cut-skip', className: 'gd-skip-btn', onClick: () => this.skip() },
+          createGDIconElement('skip', 14, GD_PALETTE.pink),
+          ' SKIP CUTSCENE [Space]'
+        )
+      ),
+      el(
+        'div',
+        { className: 'gd-letterbox gd-lb-bot' },
+        this.captionEl,
+        el('div', { className: 'gd-cut-bar' }, this.barFillEl)
+      )
+    );
     document.body.appendChild(this.overlayEl);
-
-    this.titleEl = this.overlayEl.querySelector('#gd-cut-title')!;
-    this.subEl = this.overlayEl.querySelector('#gd-cut-sub')!;
-    this.captionEl = this.overlayEl.querySelector('#gd-cut-caption')!;
-    this.barFillEl = this.overlayEl.querySelector('#gd-cut-fill')!;
-
-    this.overlayEl.querySelector('#gd-cut-skip')?.addEventListener('click', () => this.skip());
 
     window.addEventListener('keydown', (e) => {
       if (!this.isPlaying) return;

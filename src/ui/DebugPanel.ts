@@ -1,5 +1,6 @@
 import { BENGALURU_ZONES, ZoneId } from '../world/bengaluruData';
-import { gdIconHTML, GD_PALETTE } from './GDIcon';
+import { createGDIconElement, GD_PALETTE } from './GDIcon';
+import { clearChildren, el } from '../security/SafeDOM';
 
 export interface DebugPanelHooks {
   getStats: () => {
@@ -37,8 +38,7 @@ export interface DebugPanelHooks {
 }
 
 /**
- * Toggleable F3 Developer & QA Debug Panel styled with GDIcon & Neon Palette
- * (#0B0F1A, #FF2E88, #00E5C3, #FFB020).
+ * Toggleable F3 Developer & QA Debug Panel built with SafeDOM + GDIcon (zero innerHTML).
  */
 export class DebugPanel {
   public isOpen = false;
@@ -49,59 +49,56 @@ export class DebugPanel {
 
   constructor(hooks: DebugPanelHooks) {
     this.hooks = hooks;
+    this.statsEl = el('div', { id: 'gd-dbg-stats', className: 'gd-debug-stats' });
 
-    this.root = document.createElement('div');
-    this.root.id = 'gd-debug-panel';
-    this.root.className = 'gd-debug-panel hidden';
-    this.root.innerHTML = `
-      <div class="gd-debug-head">
-        <span>${gdIconHTML('debug', 16, GD_PALETTE.pink)} <b>DEBUG OVERLAY [F3]</b></span>
-        <button id="gd-dbg-close" class="gd-mini-btn">✕</button>
-      </div>
-      <div id="gd-dbg-stats" class="gd-debug-stats"></div>
-      <div class="gd-debug-sub">QUALITY TIER OVERRIDE (LIVE PROFILING)</div>
-      <div class="gd-debug-actions">
-        <button id="gd-dbg-q-auto" class="gd-mini-btn">AUTO</button>
-        <button id="gd-dbg-q-lite" class="gd-mini-btn">LITE</button>
-        <button id="gd-dbg-q-med" class="gd-mini-btn">MEDIUM</button>
-        <button id="gd-dbg-q-high" class="gd-mini-btn">HIGH</button>
-      </div>
-      <div class="gd-debug-actions">
-        <button id="gd-dbg-cash" class="gd-mini-btn">${gdIconHTML('cash', 13, GD_PALETTE.amber)} +₹10,000</button>
-        <button id="gd-dbg-spawn" class="gd-mini-btn">${gdIconHTML('skull', 13, GD_PALETTE.pink)} Spawn Rivals</button>
-        <button id="gd-dbg-dlg" class="gd-mini-btn">${gdIconHTML('dialogue', 13, GD_PALETTE.cyan)} Test Dialogue</button>
-        <button id="gd-dbg-cut" class="gd-mini-btn">${gdIconHTML('cutscene', 13, GD_PALETTE.amber)} Play Cutscene</button>
-        <button id="gd-dbg-complete" class="gd-mini-btn">${gdIconHTML('trophy', 13, GD_PALETTE.cyan)} Complete Mission</button>
-        <button id="gd-dbg-end-l" class="gd-mini-btn">${gdIconHTML('loyalty', 13, GD_PALETTE.cyan)} Loyalty Ending</button>
-        <button id="gd-dbg-end-p" class="gd-mini-btn">${gdIconHTML('power', 13, GD_PALETTE.pink)} Power Ending</button>
-      </div>
-      <div class="gd-debug-sub">TELEPORT TO BENGALURU ZONE</div>
-      <div id="gd-dbg-zones" class="gd-debug-zones"></div>
-    `;
-    document.body.appendChild(this.root);
-    this.statsEl = this.root.querySelector('#gd-dbg-stats') as HTMLDivElement;
-
-    this.root.querySelector('#gd-dbg-close')?.addEventListener('click', () => this.toggle(false));
-    this.root.querySelector('#gd-dbg-q-auto')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('auto'); this.refreshStats(); });
-    this.root.querySelector('#gd-dbg-q-lite')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('lite'); this.refreshStats(); });
-    this.root.querySelector('#gd-dbg-q-med')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('medium'); this.refreshStats(); });
-    this.root.querySelector('#gd-dbg-q-high')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('high'); this.refreshStats(); });
-    this.root.querySelector('#gd-dbg-cash')?.addEventListener('click', () => this.hooks.onGiveCash(10000));
-    this.root.querySelector('#gd-dbg-spawn')?.addEventListener('click', () => this.hooks.onSpawnEnemies());
-    this.root.querySelector('#gd-dbg-dlg')?.addEventListener('click', () => this.hooks.onTriggerDialogueTest());
-    this.root.querySelector('#gd-dbg-cut')?.addEventListener('click', () => this.hooks.onTriggerCutsceneTest());
-    this.root.querySelector('#gd-dbg-complete')?.addEventListener('click', () => this.hooks.onCompleteMission());
-    this.root.querySelector('#gd-dbg-end-l')?.addEventListener('click', () => this.hooks.onTriggerEnding('loyalty'));
-    this.root.querySelector('#gd-dbg-end-p')?.addEventListener('click', () => this.hooks.onTriggerEnding('power'));
-
-    const zonesBox = this.root.querySelector('#gd-dbg-zones') as HTMLDivElement;
+    const zonesBox = el('div', { id: 'gd-dbg-zones', className: 'gd-debug-zones' });
     for (const z of BENGALURU_ZONES) {
-      const btn = document.createElement('button');
-      btn.className = 'gd-zone-chip';
-      btn.textContent = z.name.split('/')[0].trim();
-      btn.addEventListener('click', () => this.hooks.onTeleportZone(z.id));
-      zonesBox.appendChild(btn);
+      zonesBox.appendChild(
+        el('button', {
+          className: 'gd-zone-chip',
+          text: z.name.split('/')[0].trim(),
+          onClick: () => this.hooks.onTeleportZone(z.id)
+        })
+      );
     }
+
+    const tierBtn = (label: string, tier: 'auto' | 'lite' | 'medium' | 'high') =>
+      el('button', {
+        className: 'gd-mini-btn',
+        text: label,
+        onClick: () => {
+          this.hooks.onSetQualityTier?.(tier);
+          this.refreshStats();
+        }
+      });
+
+    this.root = el(
+      'div',
+      { id: 'gd-debug-panel', className: 'gd-debug-panel hidden' },
+      el(
+        'div',
+        { className: 'gd-debug-head' },
+        el('span', {}, createGDIconElement('debug', 16, GD_PALETTE.pink), ' ', el('b', { text: 'DEBUG OVERLAY [F3]' })),
+        el('button', { id: 'gd-dbg-close', className: 'gd-mini-btn', text: '✕', onClick: () => this.toggle(false) })
+      ),
+      this.statsEl,
+      el('div', { className: 'gd-debug-sub', text: 'QUALITY TIER OVERRIDE (LIVE PROFILING)' }),
+      el('div', { className: 'gd-debug-actions' }, tierBtn('AUTO', 'auto'), tierBtn('LITE', 'lite'), tierBtn('MEDIUM', 'medium'), tierBtn('HIGH', 'high')),
+      el(
+        'div',
+        { className: 'gd-debug-actions' },
+        el('button', { className: 'gd-mini-btn', onClick: () => this.hooks.onGiveCash(10000) }, createGDIconElement('cash', 13, GD_PALETTE.amber), ' +₹10,000'),
+        el('button', { className: 'gd-mini-btn', onClick: () => this.hooks.onSpawnEnemies() }, createGDIconElement('skull', 13, GD_PALETTE.pink), ' Spawn Rivals'),
+        el('button', { className: 'gd-mini-btn', onClick: () => this.hooks.onTriggerDialogueTest() }, createGDIconElement('dialogue', 13, GD_PALETTE.cyan), ' Test Dialogue'),
+        el('button', { className: 'gd-mini-btn', onClick: () => this.hooks.onTriggerCutsceneTest() }, createGDIconElement('cutscene', 13, GD_PALETTE.amber), ' Play Cutscene'),
+        el('button', { className: 'gd-mini-btn', onClick: () => this.hooks.onCompleteMission() }, createGDIconElement('trophy', 13, GD_PALETTE.cyan), ' Complete Mission'),
+        el('button', { className: 'gd-mini-btn', onClick: () => this.hooks.onTriggerEnding('loyalty') }, createGDIconElement('loyalty', 13, GD_PALETTE.cyan), ' Loyalty Ending'),
+        el('button', { className: 'gd-mini-btn', onClick: () => this.hooks.onTriggerEnding('power') }, createGDIconElement('power', 13, GD_PALETTE.pink), ' Power Ending')
+      ),
+      el('div', { className: 'gd-debug-sub', text: 'TELEPORT TO BENGALURU ZONE' }),
+      zonesBox
+    );
+    document.body.appendChild(this.root);
 
     window.addEventListener('keydown', (e) => {
       if (e.code === 'F3') {
@@ -137,14 +134,50 @@ export class DebugPanel {
     const tierLabel = (s.tier || 'HIGH').toUpperCase();
     const limitLabel = s.frameLimit && s.frameLimit > 0 ? `${s.frameLimit} FPS` : 'Uncapped';
     const gpuShort = (s.gpu || 'WebGL2').slice(0, 44);
-    this.statsEl.innerHTML = `
-      <div><b>FPS:</b> <span style="color:${GD_PALETTE.cyan}">${s.fps}</span> (${s.frameMs ?? '--'} ms • Cap: ${limitLabel}) &nbsp;|&nbsp; <b>Tier:</b> <span style="color:${GD_PALETTE.amber}">${tierLabel}</span></div>
-      <div><b>DRS:</b> ${Math.round((s.renderScale ?? 1) * 100)}% &nbsp;|&nbsp; <b>DPR:</b> ${s.effectiveDpr ?? 1}x &nbsp;|&nbsp; <b>Draws:</b> <span style="color:${GD_PALETTE.pink}">${s.drawCalls ?? '--'}</span> &nbsp;|&nbsp; <b>Tris:</b> ${s.triangles ? (s.triangles / 1000).toFixed(1) + 'k' : '--'}</div>
-      <div><b>Heap:</b> ${memStr} &nbsp;|&nbsp; <b>Battery:</b> ${s.battery || 'AC/N/A'} ${s.powerSaver ? '(Saver)' : ''}</div>
-      <div><b>Device:</b> ${(s.platform || 'web').toUpperCase()} • ${s.refreshHz ?? 60}Hz • ${gpuShort}</div>
-      <div><b>Tiles:</b> ${s.chunks} &nbsp;|&nbsp; <b>NPCs:</b> ${s.npcs} &nbsp;|&nbsp; <b>Vehicles:</b> ${s.vehicles} &nbsp;|&nbsp; <b>Gun:</b> ${s.holstered ? 'In Pocket' : 'Drawn'}</div>
-      <div><b>Cash:</b> ₹${s.cash.toLocaleString()} &nbsp;|&nbsp; <b>Loyalty:</b> <span style="color:${GD_PALETTE.cyan}">${s.loyalty}</span> &nbsp;|&nbsp; <b>Power:</b> <span style="color:${GD_PALETTE.pink}">${s.power}</span></div>
-      <div><b>Story:</b> ${s.chapterLabel}</div>
-    `;
+    const trisStr = s.triangles ? `${(s.triangles / 1000).toFixed(1)}k` : '--';
+
+    clearChildren(this.statsEl);
+    this.statsEl.append(
+      el(
+        'div',
+        {},
+        el('b', { text: 'FPS: ' }),
+        el('span', { text: String(s.fps), style: { color: GD_PALETTE.cyan } }),
+        ` (${s.frameMs ?? '--'} ms • Cap: ${limitLabel}) | `,
+        el('b', { text: 'Tier: ' }),
+        el('span', { text: tierLabel, style: { color: GD_PALETTE.amber } })
+      ),
+      el(
+        'div',
+        {},
+        el('b', { text: 'DRS: ' }), `${Math.round((s.renderScale ?? 1) * 100)}% | `,
+        el('b', { text: 'DPR: ' }), `${s.effectiveDpr ?? 1}x | `,
+        el('b', { text: 'Draws: ' }), el('span', { text: String(s.drawCalls ?? '--'), style: { color: GD_PALETTE.pink } }),
+        ' | ', el('b', { text: 'Tris: ' }), trisStr
+      ),
+      el(
+        'div',
+        {},
+        el('b', { text: 'Heap: ' }), `${memStr} | `,
+        el('b', { text: 'Battery: ' }), `${s.battery || 'AC/N/A'}${s.powerSaver ? ' (Saver)' : ''}`
+      ),
+      el('div', {}, el('b', { text: 'Device: ' }), `${(s.platform || 'web').toUpperCase()} • ${s.refreshHz ?? 60}Hz • ${gpuShort}`),
+      el(
+        'div',
+        {},
+        el('b', { text: 'Tiles: ' }), `${s.chunks} | `,
+        el('b', { text: 'NPCs: ' }), `${s.npcs} | `,
+        el('b', { text: 'Vehicles: ' }), `${s.vehicles} | `,
+        el('b', { text: 'Gun: ' }), s.holstered ? 'In Pocket' : 'Drawn'
+      ),
+      el(
+        'div',
+        {},
+        el('b', { text: 'Cash: ' }), `₹${s.cash.toLocaleString()} | `,
+        el('b', { text: 'Loyalty: ' }), el('span', { text: String(s.loyalty), style: { color: GD_PALETTE.cyan } }), ' | ',
+        el('b', { text: 'Power: ' }), el('span', { text: String(s.power), style: { color: GD_PALETTE.pink } })
+      ),
+      el('div', {}, el('b', { text: 'Story: ' }), s.chapterLabel)
+    );
   }
 }

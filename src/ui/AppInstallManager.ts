@@ -1,20 +1,19 @@
+import { clearChildren, el } from '../security/SafeDOM';
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
 /**
- * Cross-platform App Installer & Service Worker Manager:
- * - Registers ./sw.js so Android, iOS, macOS, and Windows treat the game as an installable app.
- * - Captures beforeinstallprompt for 1-click native installation on Android Chrome/Edge and Desktop Chrome/Edge.
- * - Provides platform-tailored Install Guide modal for iOS Safari ("Add to Home Screen"),
- *   macOS Safari ("Add to Dock"), and browsers without beforeinstallprompt.
+ * Cross-platform App Installer & Service Worker Manager built with SafeDOM (zero innerHTML).
  */
 export class AppInstallManager {
   private deferredPrompt: BeforeInstallPromptEvent | null = null;
   public isInstalled = false;
   public isModalOpen = false;
   private modalEl: HTMLDivElement;
+  private guideBodyEl!: HTMLDivElement;
   public onModalToggle?: (open: boolean) => void;
   public onNotify?: (msg: string) => void;
 
@@ -110,37 +109,63 @@ export class AppInstallManager {
   }
 
   private createInstallGuideModal(): HTMLDivElement {
-    const el = document.createElement('div');
-    el.id = 'app-install-modal';
-    el.className = 'modal-overlay hidden';
-    el.innerHTML = `
-      <div class="install-modal-card">
-        <div class="install-card-head">
-          <img src="./icons/icon-192.png" alt="Garden City App Icon" class="install-app-icon" />
-          <div>
-            <div class="install-kicker">ONE APP • ANDROID • iOS • macOS • WINDOWS</div>
-            <h2>INSTALL GARDEN CITY UNDERWORLD</h2>
-            <p class="install-sub">Launch full-screen with the custom emblem icon right from your Home Screen, Dock, or Desktop.</p>
-          </div>
-          <button id="btn-close-install" class="btn-close" aria-label="Close">✕</button>
-        </div>
-        <div id="install-guide-body" class="install-guide-body"></div>
-        <div class="install-card-foot">
-          <button id="btn-install-done" class="btn-primary">GOT IT</button>
-        </div>
-      </div>
-    `;
-    el.querySelector('#btn-close-install')?.addEventListener('click', () => this.setModalOpen(false));
-    el.querySelector('#btn-install-done')?.addEventListener('click', () => this.setModalOpen(false));
-    el.addEventListener('click', (e) => {
-      if (e.target === el) this.setModalOpen(false);
-    });
-    return el;
+    this.guideBodyEl = el('div', { id: 'install-guide-body', className: 'install-guide-body' });
+
+    const overlay = el(
+      'div',
+      {
+        id: 'app-install-modal',
+        className: 'modal-overlay hidden',
+        onClick: (e) => {
+          if (e.target === overlay) this.setModalOpen(false);
+        }
+      },
+      el(
+        'div',
+        { className: 'install-modal-card' },
+        el(
+          'div',
+          { className: 'install-card-head' },
+          el('img', {
+            className: 'install-app-icon',
+            attrs: { src: './icons/icon-192.png', alt: 'Garden City App Icon' }
+          }),
+          el(
+            'div',
+            {},
+            el('div', { className: 'install-kicker', text: 'ONE APP • ANDROID • iOS • macOS • WINDOWS' }),
+            el('h2', { text: 'INSTALL GARDEN CITY UNDERWORLD' }),
+            el('p', {
+              className: 'install-sub',
+              text: 'Launch full-screen with the custom emblem icon right from your Home Screen, Dock, or Desktop.'
+            })
+          ),
+          el('button', {
+            id: 'btn-close-install',
+            className: 'btn-close',
+            text: '✕',
+            attrs: { 'aria-label': 'Close' },
+            onClick: () => this.setModalOpen(false)
+          })
+        ),
+        this.guideBodyEl,
+        el(
+          'div',
+          { className: 'install-card-foot' },
+          el('button', {
+            id: 'btn-install-done',
+            className: 'btn-primary',
+            text: 'GOT IT',
+            onClick: () => this.setModalOpen(false)
+          })
+        )
+      )
+    );
+    return overlay;
   }
 
   private populatePlatformGuide(): void {
-    const body = this.modalEl.querySelector('#install-guide-body');
-    if (!body) return;
+    clearChildren(this.guideBodyEl);
 
     const ua = navigator.userAgent || '';
     const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -148,43 +173,47 @@ export class AppInstallManager {
     const isMac = /Mac|Macintosh/i.test(ua) && !isIOS;
     const isSafari = /Safari/i.test(ua) && !/Chrome|Chromium|Edg|CriOS|FxiOS/i.test(ua);
 
-    const activeHighlight = (match: boolean) => (match ? ' active' : '');
+    const makeCard = (title: string, active: boolean, steps: string[]) =>
+      el(
+        'div',
+        { className: `install-step-card${active ? ' active' : ''}` },
+        el('div', { className: 'install-plat-title', text: title }),
+        el('ol', {}, ...steps.map((s) => el('li', { text: s })))
+      );
 
-    body.innerHTML = `
-      <div class="install-platform-grid">
-        <div class="install-step-card${activeHighlight(isAndroid)}">
-          <div class="install-plat-title">🤖 Android Phones &amp; Tablets</div>
-          <ol>
-            <li>Open in <strong>Chrome</strong>, <strong>Edge</strong>, or <strong>Samsung Internet</strong>.</li>
-            <li>Tap the <strong>⋮ Menu</strong> (top-right) → <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</li>
-            <li>Tap <strong>Install</strong> — the app icon appears on your home screen &amp; app drawer.</li>
-          </ol>
-        </div>
-        <div class="install-step-card${activeHighlight(isIOS)}">
-          <div class="install-plat-title">📱 iPhone &amp; iPad (iOS / iPadOS)</div>
-          <ol>
-            <li>Open this link in <strong>Safari</strong>.</li>
-            <li>Tap the <strong>Share</strong> icon (square with upward arrow) at the bottom/top bar.</li>
-            <li>Scroll down and tap <strong>Add to Home Screen</strong> → <strong>Add</strong>.</li>
-          </ol>
-        </div>
-        <div class="install-step-card${activeHighlight(isMac)}">
-          <div class="install-plat-title">💻 MacBook &amp; macOS</div>
-          <ol>
-            <li><strong>Safari (macOS Sonoma+):</strong> Click <strong>File → Add to Dock…</strong> (or Share → Add to Dock).</li>
-            <li><strong>Chrome / Edge:</strong> Click the <strong>Install icon (⊕ / monitor-arrow)</strong> on the right side of the address bar → <strong>Install</strong>.</li>
-          </ol>
-        </div>
-        <div class="install-step-card${activeHighlight(!isAndroid && !isIOS && !isMac)}">
-          <div class="install-plat-title">🖥️ Windows 10 / 11 &amp; Laptops</div>
-          <ol>
-            <li>Open in <strong>Chrome</strong> or <strong>Microsoft Edge</strong>.</li>
-            <li>Click the <strong>Install App</strong> icon on the right of the address bar (or Menu → <strong>Apps → Install this site as an app</strong>).</li>
-            <li>Pin it to your <strong>Taskbar</strong> or <strong>Desktop</strong> for 1-click launch.</li>
-          </ol>
-        </div>
-      </div>
-      ${isIOS && !isSafari ? '<div class="install-tip">💡 Tip: On iPhone/iPad, open this URL in <strong>Safari</strong> to enable full-screen Home Screen app installation.</div>' : ''}
-    `;
+    this.guideBodyEl.appendChild(
+      el(
+        'div',
+        { className: 'install-platform-grid' },
+        makeCard('🤖 Android Phones & Tablets', isAndroid, [
+          'Open in Chrome, Edge, or Samsung Internet.',
+          'Tap the ⋮ Menu (top-right) → Install app (or Add to Home screen).',
+          'Tap Install — the app icon appears on your home screen & app drawer.'
+        ]),
+        makeCard('📱 iPhone & iPad (iOS / iPadOS)', isIOS, [
+          'Open this link in Safari.',
+          'Tap the Share icon (square with upward arrow) on the toolbar.',
+          'Scroll down and tap Add to Home Screen → Add.'
+        ]),
+        makeCard('💻 MacBook & macOS', isMac, [
+          'Safari (macOS Sonoma+): Click File → Add to Dock… (or Share → Add to Dock).',
+          'Chrome / Edge: Click the Install icon on the right side of the address bar → Install.'
+        ]),
+        makeCard('🖥️ Windows 10 / 11 & Laptops', !isAndroid && !isIOS && !isMac, [
+          'Open in Chrome or Microsoft Edge.',
+          'Click the Install App icon on the right of the address bar (or Menu → Apps → Install this site as an app).',
+          'Pin it to your Taskbar or Desktop for 1-click launch.'
+        ])
+      )
+    );
+
+    if (isIOS && !isSafari) {
+      this.guideBodyEl.appendChild(
+        el('div', {
+          className: 'install-tip',
+          text: '💡 Tip: On iPhone/iPad, open this URL in Safari to enable full-screen Home Screen app installation.'
+        })
+      );
+    }
   }
 }

@@ -34,6 +34,8 @@ import { CampaignManager } from './story/CampaignManager';
 import { DebugPanel } from './ui/DebugPanel';
 import { AppInstallManager } from './ui/AppInstallManager';
 import { TouchControlsUI, TouchModePref } from './ui/TouchControlsUI';
+import { PrivacyManager, safeStorageGet, safeStorageSet } from './security/PrivacyManager';
+import { clearChildren, el } from './security/SafeDOM';
 import {
   CharacterLoadout,
   loadCharacterLoadout,
@@ -86,6 +88,7 @@ class GardenCityGame {
   private debugPanel!: DebugPanel;
   private appInstall = new AppInstallManager();
   private touchControls = new TouchControlsUI();
+  private privacy = new PrivacyManager(true);
   private characterLoadout: CharacterLoadout = loadCharacterLoadout();
   private lastFps = 60;
 
@@ -292,6 +295,7 @@ class GardenCityGame {
     this.setLoadProgress('Ready — Welcome to Garden City Underworld', 100);
     document.getElementById('loading-status')?.classList.add('hidden');
     document.getElementById('title-actions')?.classList.remove('hidden');
+    this.privacy.maybeShowFirstLaunchConsent();
 
     requestAnimationFrame(this.loop);
   }
@@ -329,17 +333,46 @@ class GardenCityGame {
     const cfg = this.quality.getTierConfig();
     const batStr = t.batteryLevel !== null ? `${t.batteryLevel}% (${t.batteryCharging ? 'Charging' : 'On Battery'})` : 'AC / Not reported';
     const memStr = p.deviceMemoryGB !== null ? `${p.deviceMemoryGB} GB` : 'Browser hidden';
-    const hybridTip = p.isHybridGpuLikely
-      ? `<div class="hybrid-gpu-tip">⚡ <strong>Hybrid GPU Tip:</strong> Integrated GPU detected (${p.gpuRenderer}). On Windows, open <em>Settings → System → Display → Graphics</em> and set your browser to <strong>High Performance</strong> to use your discrete GPU. On Intel Macs, disable <em>Automatic Graphics Switching</em> in Battery settings.</div>`
-      : '';
 
-    box.innerHTML = `
-      <div><strong>Detected Hardware:</strong> ${p.platform.toUpperCase()} • ${p.gpuRenderer}</div>
-      <div><strong>Active Tier:</strong> ${t.tier.toUpperCase()} (Auto: ${p.recommendedTier.toUpperCase()} • Bench: ${p.benchmarkFps} FPS) &nbsp;|&nbsp; <strong>Display:</strong> ${p.screenWidth}×${p.screenHeight} @ ${p.refreshRateHz}Hz</div>
-      <div><strong>Scale:</strong> ${Math.round(t.renderScale * 100)}% • <strong>Effective DPR:</strong> ${t.effectiveDpr}x (cap ${cfg.maxDpr}x) &nbsp;|&nbsp; <strong>RAM:</strong> ${memStr} • <strong>Cores:</strong> ${p.hardwareConcurrency} &nbsp;|&nbsp; <strong>Battery:</strong> ${batStr}</div>
-      <div><strong>Min Specs:</strong> LITE 3 GB phone / UHD 620 8 GB (30 FPS 720p) • MEDIUM Iris Xe / GTX 1650 (45–60 FPS 1080p) • HIGH M1–M4 / RTX 3050+ / Flagship (60–120 FPS) • WebGL2 Required${p.webgpuAvailable ? ' (WebGPU detected, WebGL2 active)' : ''}</div>
-      ${hybridTip}
-    `;
+    clearChildren(box);
+    box.append(
+      el('div', {}, el('strong', { text: 'Detected Hardware: ' }), `${p.platform.toUpperCase()} • ${p.gpuRenderer}`),
+      el(
+        'div',
+        {},
+        el('strong', { text: 'Active Tier: ' }),
+        `${t.tier.toUpperCase()} (Auto: ${p.recommendedTier.toUpperCase()} • Bench: ${p.benchmarkFps} FPS) | `,
+        el('strong', { text: 'Display: ' }),
+        `${p.screenWidth}×${p.screenHeight} @ ${p.refreshRateHz}Hz`
+      ),
+      el(
+        'div',
+        {},
+        el('strong', { text: 'Scale: ' }), `${Math.round(t.renderScale * 100)}% • `,
+        el('strong', { text: 'Effective DPR: ' }), `${t.effectiveDpr}x (cap ${cfg.maxDpr}x) | `,
+        el('strong', { text: 'RAM: ' }), `${memStr} • `,
+        el('strong', { text: 'Cores: ' }), `${p.hardwareConcurrency} | `,
+        el('strong', { text: 'Battery: ' }), batStr
+      ),
+      el(
+        'div',
+        {},
+        el('strong', { text: 'Min Specs: ' }),
+        `LITE 3 GB phone / UHD 620 8 GB (30 FPS 720p) • MEDIUM Iris Xe / GTX 1650 (45–60 FPS 1080p) • HIGH M1–M4 / RTX 3050+ / Flagship (60–120 FPS) • WebGL2 Required${p.webgpuAvailable ? ' (WebGPU detected, WebGL2 active)' : ''}`
+      )
+    );
+
+    if (p.isHybridGpuLikely) {
+      box.appendChild(
+        el(
+          'div',
+          { className: 'hybrid-gpu-tip' },
+          '⚡ ',
+          el('strong', { text: 'Hybrid GPU Tip: ' }),
+          `Integrated GPU detected (${p.gpuRenderer}). On Windows, open Settings → System → Display → Graphics and set your browser to High Performance to use your discrete GPU. On Intel Macs, disable Automatic Graphics Switching in Battery settings.`
+        )
+      );
+    }
   }
 
   private syncQualitySettingsUI(): void {
@@ -748,29 +781,25 @@ class GardenCityGame {
   }
 
   private saveProgress(): void {
-    try {
-      const unlocked: WeaponId[] = [];
-      for (const [id, st] of this.weapons.states.entries()) {
-        if (st.unlocked) unlocked.push(id);
-      }
-      localStorage.setItem(
-        SAVE_KEY,
-        JSON.stringify({
-          cash: this.missions.cash,
-          respect: this.missions.respect,
-          ownedZones: [...this.missions.ownedZones],
-          completedMissions: [...this.missions.completedMissions],
-          unlockedWeapons: unlocked
-        })
-      );
-    } catch {
-      // ignore storage errors
+    const unlocked: WeaponId[] = [];
+    for (const [id, st] of this.weapons.states.entries()) {
+      if (st.unlocked) unlocked.push(id);
     }
+    safeStorageSet(
+      SAVE_KEY,
+      JSON.stringify({
+        cash: this.missions.cash,
+        respect: this.missions.respect,
+        ownedZones: [...this.missions.ownedZones],
+        completedMissions: [...this.missions.completedMissions],
+        unlockedWeapons: unlocked
+      })
+    );
   }
 
   private loadSavedProgress(): void {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = safeStorageGet(SAVE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
       if (typeof data.cash === 'number') this.missions.cash = data.cash;
@@ -876,7 +905,8 @@ class GardenCityGame {
       this.campaign.isJournalOpen ||
       this.cutscenes.isPlaying ||
       this.debugPanel.isOpen ||
-      this.appInstall.isModalOpen;
+      this.appInstall.isModalOpen ||
+      this.privacy.isModalOpen;
     this.input.uiBlocked = anyModal;
     if (anyModal) {
       this.input.releasePointerLock();
@@ -993,6 +1023,14 @@ class GardenCityGame {
     (document.getElementById('set-interact-key') as HTMLSelectElement)?.addEventListener('change', (e) => {
       this.input.interactKey = (e.target as HTMLSelectElement).value;
     });
+
+    document.querySelectorAll('[data-privacy-btn]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.privacy.setModalOpen(true);
+      });
+    });
+    this.privacy.onModalToggle = () => this.syncUIBlockState();
+    this.privacy.onNotify = (msg) => this.shopMetroUI.showToast(msg, 4.2);
 
     document.querySelectorAll('[data-install-app-btn]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1249,7 +1287,9 @@ class GardenCityGame {
 
     if (this.started) {
       if (input.pauseTogglePressed) {
-        if (this.appInstall.isModalOpen) {
+        if (this.privacy.isModalOpen) {
+          this.privacy.setModalOpen(false);
+        } else if (this.appInstall.isModalOpen) {
           this.appInstall.setModalOpen(false);
         } else if (this.cutscenes.isPlaying) {
           this.cutscenes.skip();

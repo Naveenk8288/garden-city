@@ -5,5 +5,13 @@ dist/
 .osm-cache/
 .env
 .env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
 .DS_Store
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { safeStorageGet, safeStorageSet } from '../security/PrivacyManager';
 
 export type PlatformFamily = 'android' | 'macos' | 'windows' | 'ios' | 'linux' | 'unknown';
 export type QualityTier = 'lite' | 'medium' | 'high';
@@ -165,8 +166,7 @@ export function classifyHardwareTier(input: {
 
 export function loadSavedHardwareProfile(): HardwareProfile | null {
   try {
-    if (typeof localStorage === 'undefined') return null;
-    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+    const raw = safeStorageGet(PROFILE_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as HardwareProfile;
     if (!parsed || !parsed.recommendedTier) return null;
@@ -177,13 +177,7 @@ export function loadSavedHardwareProfile(): HardwareProfile | null {
 }
 
 export function saveHardwareProfile(profile: HardwareProfile): void {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
-    }
-  } catch {
-    // ignore storage quota errors
-  }
+  safeStorageSet(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
 function snapRefreshRate(rawHz: number): number {

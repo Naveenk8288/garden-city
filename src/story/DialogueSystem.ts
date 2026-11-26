@@ -1,5 +1,6 @@
 import { gameBus } from '../core/EventBus';
-import { gdIconHTML, GD_PALETTE } from '../ui/GDIcon';
+import { createGDIconElement, GD_PALETTE } from '../ui/GDIcon';
+import { clearChildren, el } from '../security/SafeDOM';
 import {
   DialogueChoice,
   DialogueSceneDef,
@@ -34,56 +35,65 @@ export class DialogueSystem {
   private onComplete?: (choice: DialogueChoice | null) => void;
 
   constructor() {
-    this.modalEl = document.createElement('div');
-    this.modalEl.id = 'gd-dialogue-modal';
-    this.modalEl.className = 'gd-dialogue-overlay hidden';
-    this.modalEl.innerHTML = `
-      <div class="gd-dialogue-card">
-        <div class="gd-dlg-top">
-          <div class="gd-dlg-title">${gdIconHTML('dialogue', 16, GD_PALETTE.cyan)} <span id="gd-dlg-scene-title">STORY CONVERSATION</span></div>
-          <div class="gd-dlg-lang-pills">
-            <button class="gd-lang-btn active" data-lang="en">EN</button>
-            <button class="gd-lang-btn" data-lang="kn">ಕನ್ನಡ</button>
-            <button class="gd-lang-btn" data-lang="hi">हिन्दी</button>
-            <button id="gd-dlg-voice" class="gd-lang-btn active" title="Toggle Voice-Over Placeholder">🔊 VO</button>
-          </div>
-        </div>
-        <div class="gd-dlg-speaker-row">
-          <span id="gd-dlg-speaker" class="gd-dlg-speaker">RAGHAV "ANNA" RAO</span>
-          <span id="gd-dlg-role" class="gd-dlg-role">MENTOR</span>
-        </div>
-        <div id="gd-dlg-text" class="gd-dlg-text"></div>
-        <div id="gd-dlg-choices" class="gd-dlg-choices"></div>
-        <div class="gd-dlg-footer">
-          <button id="gd-dlg-next" class="gd-btn-cyan">CONTINUE ▸</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(this.modalEl);
-
-    this.titleEl = this.modalEl.querySelector('#gd-dlg-scene-title')!;
-    this.speakerEl = this.modalEl.querySelector('#gd-dlg-speaker')!;
-    this.roleEl = this.modalEl.querySelector('#gd-dlg-role')!;
-    this.textEl = this.modalEl.querySelector('#gd-dlg-text')!;
-    this.choicesEl = this.modalEl.querySelector('#gd-dlg-choices')!;
-    this.nextBtn = this.modalEl.querySelector('#gd-dlg-next') as HTMLButtonElement;
-
-    this.nextBtn.addEventListener('click', () => this.advance());
-
-    this.modalEl.querySelectorAll('.gd-lang-btn[data-lang]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const lang = (btn as HTMLElement).dataset.lang as StoryLanguage;
-        this.setLanguage(lang);
-      });
+    this.titleEl = el('span', { id: 'gd-dlg-scene-title', text: 'STORY CONVERSATION' });
+    this.speakerEl = el('span', { id: 'gd-dlg-speaker', className: 'gd-dlg-speaker', text: 'RAGHAV "ANNA" RAO' });
+    this.roleEl = el('span', { id: 'gd-dlg-role', className: 'gd-dlg-role', text: 'MENTOR' });
+    this.textEl = el('div', { id: 'gd-dlg-text', className: 'gd-dlg-text' });
+    this.choicesEl = el('div', { id: 'gd-dlg-choices', className: 'gd-dlg-choices' });
+    this.nextBtn = el('button', {
+      id: 'gd-dlg-next',
+      className: 'gd-btn-cyan',
+      text: 'CONTINUE ▸',
+      onClick: () => this.advance()
     });
 
-    const voBtn = this.modalEl.querySelector('#gd-dlg-voice')!;
+    const makeLangBtn = (lang: StoryLanguage, label: string, active = false) =>
+      el('button', {
+        className: `gd-lang-btn${active ? ' active' : ''}`,
+        text: label,
+        attrs: { 'data-lang': lang },
+        onClick: () => this.setLanguage(lang)
+      });
+
+    const voBtn = el('button', {
+      id: 'gd-dlg-voice',
+      className: 'gd-lang-btn active',
+      text: '🔊 VO',
+      attrs: { title: 'Toggle Voice-Over Placeholder' }
+    });
     voBtn.addEventListener('click', () => {
       this.voiceEnabled = !this.voiceEnabled;
       voBtn.classList.toggle('active', this.voiceEnabled);
       voBtn.textContent = this.voiceEnabled ? '🔊 VO' : '🔇 VO';
       if (!this.voiceEnabled) this.stopSpeech();
     });
+
+    this.modalEl = el(
+      'div',
+      { id: 'gd-dialogue-modal', className: 'gd-dialogue-overlay hidden' },
+      el(
+        'div',
+        { className: 'gd-dialogue-card' },
+        el(
+          'div',
+          { className: 'gd-dlg-top' },
+          el('div', { className: 'gd-dlg-title' }, createGDIconElement('dialogue', 16, GD_PALETTE.cyan), ' ', this.titleEl),
+          el(
+            'div',
+            { className: 'gd-dlg-lang-pills' },
+            makeLangBtn('en', 'EN', true),
+            makeLangBtn('kn', 'ಕನ್ನಡ'),
+            makeLangBtn('hi', 'हिन्दी'),
+            voBtn
+          )
+        ),
+        el('div', { className: 'gd-dlg-speaker-row' }, this.speakerEl, this.roleEl),
+        this.textEl,
+        this.choicesEl,
+        el('div', { className: 'gd-dlg-footer' }, this.nextBtn)
+      )
+    );
+    document.body.appendChild(this.modalEl);
   }
 
   public setLanguage(lang: StoryLanguage): void {
@@ -126,7 +136,7 @@ export class DialogueSystem {
     const scene = this.activeScene;
     if (!scene) return;
     this.titleEl.textContent = scene.title.toUpperCase();
-    this.choicesEl.innerHTML = '';
+    clearChildren(this.choicesEl);
 
     if (this.showingReply && this.pendingChoice) {
       const ch = getCharacterById(this.pendingChoice.replySpeakerId);
@@ -155,16 +165,22 @@ export class DialogueSystem {
     if (isLastLine && scene.choices.length > 0) {
       this.nextBtn.classList.add('hidden');
       for (const c of scene.choices) {
-        const btn = document.createElement('button');
-        btn.className = `gd-choice-btn ${c.alignment}`;
-        const ico =
+        const iconEl =
           c.alignment === 'loyalty'
-            ? gdIconHTML('loyalty', 16, GD_PALETTE.cyan)
+            ? createGDIconElement('loyalty', 16, GD_PALETTE.cyan)
             : c.alignment === 'power'
-              ? gdIconHTML('power', 16, GD_PALETTE.pink)
-              : gdIconHTML('dialogue', 16, GD_PALETTE.amber);
-        btn.innerHTML = `${ico} <span>${this.pickLang(c.label)}</span>`;
-        btn.addEventListener('click', () => this.selectChoice(c));
+              ? createGDIconElement('power', 16, GD_PALETTE.pink)
+              : createGDIconElement('dialogue', 16, GD_PALETTE.amber);
+        const btn = el(
+          'button',
+          {
+            className: `gd-choice-btn ${c.alignment}`,
+            onClick: () => this.selectChoice(c)
+          },
+          iconEl,
+          ' ',
+          el('span', { text: this.pickLang(c.label) })
+        );
         this.choicesEl.appendChild(btn);
       }
     } else {

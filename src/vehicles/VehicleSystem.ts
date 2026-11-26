@@ -903,7 +903,7 @@ export class VehicleSystem {
         if (d < 34 || d > 175) continue;
 
         const roll = Math.random();
-        let kind: VehicleKind = 'auto';
+        let kind: VehicleKind;
         if (wantedStars >= 2 && roll < 0.18) kind = 'patrol';
         else if (roll < 0.36) kind = 'bike';
         else if (roll < 0.64) kind = 'auto';

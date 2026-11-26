@@ -1,0 +1,19 @@
+title = "Garden City Underworld Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "vite-exposed-secret-var"
+description = "Potential secret exposed via Vite public VITE_ prefix"
+regex = '''VITE_[A-Z0-9_]*(SECRET|PRIVATE_KEY|API_KEY|PASSWORD|ACCESS_TOKEN|AUTH_TOKEN)\s*=\s*['"]?[A-Za-z0-9_\-\/+=]{8,}'''
+tags = ["vite", "client-secret"]
+
+[allowlist]
+description = "Allow documentation templates and test fixtures"
+paths = [
+  '''^\.env\.example$''',
+  '''^SECURITY\.md$''',
+  '''^scripts/check-client-secrets\.mjs$''',
+  '''^scripts/test-.*\.mjs$'''
+]

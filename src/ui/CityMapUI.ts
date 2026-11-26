@@ -1,9 +1,8 @@
+import { clearChildren, el } from '../security/SafeDOM';
 import {
   BENGALURU_LANDMARKS,
   BENGALURU_ZONES,
-  NAMMA_METRO_STATIONS,
-  ZoneDef,
-  latLonToWorld
+  NAMMA_METRO_STATIONS
 } from '../world/bengaluruData';
 import { ChunkStreamer } from '../world/ChunkStreamer';
 import { MissionSystem } from '../missions/MissionSystem';
@@ -218,24 +217,32 @@ export class CityMapUI {
     ctx.stroke();
 
     // Populate Sidebar Zone Cards (Click to fast-travel to zone safehouse!)
-    this.listEl.innerHTML = '';
+    clearChildren(this.listEl);
     for (const z of BENGALURU_ZONES) {
       const owned = missions.ownedZones.has(z.id);
-      const card = document.createElement('div');
-      card.className = 'zone-card';
-      card.style.borderLeftColor = owned ? '#facc15' : z.crewColor;
-      card.innerHTML = `
-        <div class="zone-card-title">
-          <span>${z.name} <small style="color:#ffd599">${z.nameKn}</small></span>
-          <span style="color:${owned ? '#4cd137' : '#ff6b6b'}">${owned ? 'OWNED' : z.crewName}</span>
-        </div>
-        <div class="zone-card-sub">${z.description}</div>
-        <div class="zone-card-sub" style="color:#38e8ff;margin-top:4px;">Click to fast-travel → ${z.safehouseName}</div>
-      `;
-      card.addEventListener('click', () => {
-        this.onFastTravel?.(z.safehouseLat, z.safehouseLon, z.safehouseName);
-        this.setOpen(false);
-      });
+      const card = el(
+        'div',
+        {
+          className: 'zone-card',
+          style: { borderLeftColor: owned ? '#facc15' : z.crewColor },
+          onClick: () => {
+            this.onFastTravel?.(z.safehouseLat, z.safehouseLon, z.safehouseName);
+            this.setOpen(false);
+          }
+        },
+        el(
+          'div',
+          { className: 'zone-card-title' },
+          el('span', {}, `${z.name} `, el('small', { text: z.nameKn, style: { color: '#ffd599' } })),
+          el('span', { text: owned ? 'OWNED' : z.crewName, style: { color: owned ? '#4cd137' : '#ff6b6b' } })
+        ),
+        el('div', { className: 'zone-card-sub', text: z.description }),
+        el('div', {
+          className: 'zone-card-sub',
+          text: `Click to fast-travel → ${z.safehouseName}`,
+          style: { color: '#38e8ff', marginTop: '4px' }
+        })
+      );
       this.listEl.appendChild(card);
     }
   }

@@ -1,5 +1,6 @@
 import { NAMMA_METRO_STATIONS, MetroStationDef, ZoneDef } from '../world/bengaluruData';
 import { WEAPON_DEFS, WeaponSystem } from '../combat/WeaponSystem';
+import { clearChildren, el } from '../security/SafeDOM';
 
 export type SubtitleLang = 'en' | 'kn' | 'hi';
 
@@ -81,20 +82,25 @@ export class ShopMetroUI {
     this.shopModal.classList.add('hidden');
     this.metroModal.classList.remove('hidden');
 
-    this.metroList.innerHTML = '';
+    clearChildren(this.metroList);
     for (const stn of NAMMA_METRO_STATIONS) {
-      const btn = document.createElement('button');
-      btn.className = 'metro-btn';
-      btn.innerHTML = `
-        <span class="metro-line-tag ${stn.line}">${stn.line.toUpperCase()} LINE</span>
-        <div style="font-weight:700;font-size:14px;">${stn.name}</div>
-        <div style="font-size:12px;color:#ffd599;margin-top:2px;">${stn.nameKn}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">${stn.elevated ? 'Elevated Viaduct' : 'Underground Station'} • ₹30</div>
-      `;
-      btn.addEventListener('click', () => {
-        this.onMetroSelect?.(stn);
-        this.closeAll();
-      });
+      const btn = el(
+        'button',
+        {
+          className: 'metro-btn',
+          onClick: () => {
+            this.onMetroSelect?.(stn);
+            this.closeAll();
+          }
+        },
+        el('span', { className: `metro-line-tag ${stn.line}`, text: `${stn.line.toUpperCase()} LINE` }),
+        el('div', { text: stn.name, style: { fontWeight: '700', fontSize: '14px' } }),
+        el('div', { text: stn.nameKn, style: { fontSize: '12px', color: '#ffd599', marginTop: '2px' } }),
+        el('div', {
+          text: `${stn.elevated ? 'Elevated Viaduct' : 'Underground Station'} • ₹30`,
+          style: { fontSize: '11px', color: '#94a3b8', marginTop: '4px' }
+        })
+      );
       this.metroList.appendChild(btn);
     }
   }
@@ -119,81 +125,87 @@ export class ShopMetroUI {
 
     const rebuild = () => {
       if (sub) sub.textContent = `${zone.name} (${zone.nameKn}) • Cash Available: ₹${getCash().toLocaleString()}`;
-      this.shopItems.innerHTML = '';
+      clearChildren(this.shopItems);
 
       // Safehouse Rest & Clear Wanted Heat
-      const restCard = document.createElement('button');
-      restCard.className = 'shop-card';
-      restCard.innerHTML = `
-        <div style="color:#4cd137;font-weight:700;font-size:11px;">SAFEHOUSE SERVICE</div>
-        <div style="font-weight:700;font-size:16px;margin:2px 0;">Rest, Full Health &amp; Clear Wanted</div>
-        <div style="font-size:12px;color:#a6b4cb;">Lay low inside ${zone.safehouseName}. FREE</div>
-      `;
-      restCard.addEventListener('click', () => {
-        onHealAndRest();
-        this.showToast('Rested at Safehouse — Health restored & Wanted cleared!');
-        rebuild();
-      });
+      const restCard = el(
+        'button',
+        {
+          className: 'shop-card',
+          onClick: () => {
+            onHealAndRest();
+            this.showToast('Rested at Safehouse — Health restored & Wanted cleared!');
+            rebuild();
+          }
+        },
+        el('div', { text: 'SAFEHOUSE SERVICE', style: { color: '#4cd137', fontWeight: '700', fontSize: '11px' } }),
+        el('div', { text: 'Rest, Full Health & Clear Wanted', style: { fontWeight: '700', fontSize: '16px', margin: '2px 0' } }),
+        el('div', { text: `Lay low inside ${zone.safehouseName}. FREE`, style: { fontSize: '12px', color: '#a6b4cb' } })
+      );
       this.shopItems.appendChild(restCard);
 
       // Kevlar Armor Vest
-      const armorCard = document.createElement('button');
-      armorCard.className = 'shop-card';
-      armorCard.innerHTML = `
-        <div style="color:#38bdf8;font-weight:700;font-size:11px;">PROTECTION</div>
-        <div style="font-weight:700;font-size:16px;margin:2px 0;">Reinforced Street Vest (100 AR)</div>
-        <div style="font-size:12px;color:#ffd599;">Cost: ₹450</div>
-      `;
-      armorCard.addEventListener('click', () => {
-        if (spendCash(450)) {
-          onBuyArmor();
-          this.showToast('Armor refilled to 100!');
-          rebuild();
-        } else {
-          this.showToast('Not enough cash (need ₹450)');
-        }
-      });
+      const armorCard = el(
+        'button',
+        {
+          className: 'shop-card',
+          onClick: () => {
+            if (spendCash(450)) {
+              onBuyArmor();
+              this.showToast('Armor refilled to 100!');
+              rebuild();
+            } else {
+              this.showToast('Not enough cash (need ₹450)');
+            }
+          }
+        },
+        el('div', { text: 'PROTECTION', style: { color: '#38bdf8', fontWeight: '700', fontSize: '11px' } }),
+        el('div', { text: 'Reinforced Street Vest (100 AR)', style: { fontWeight: '700', fontSize: '16px', margin: '2px 0' } }),
+        el('div', { text: 'Cost: ₹450', style: { fontSize: '12px', color: '#ffd599' } })
+      );
       this.shopItems.appendChild(armorCard);
 
       // Weapons & Ammo
       for (const def of WEAPON_DEFS) {
         if (def.id === 'fists') continue;
         const st = weapons.states.get(def.id)!;
-        const card = document.createElement('button');
-        card.className = 'shop-card';
         const actionLabel = !st.unlocked
           ? `BUY WEAPON — ₹${def.price.toLocaleString()}`
           : def.category === 'firearm'
             ? `BUY AMMO (+${def.magSize * 2}) — ₹${def.ammoPrice}`
             : 'OWNED (Click to Equip)';
-        card.innerHTML = `
-          <div style="color:#ff9f2e;font-weight:700;font-size:11px;">${def.category.toUpperCase()} • DMG ${def.damage}</div>
-          <div style="font-weight:700;font-size:16px;margin:2px 0;">${def.name}</div>
-          <div style="font-size:12px;color:${st.unlocked ? '#4cd137' : '#ffd599'};">${actionLabel}</div>
-        `;
-        card.addEventListener('click', () => {
-          if (!st.unlocked) {
-            if (spendCash(def.price)) {
-              weapons.unlock(def.id);
-              weapons.equip(def.id);
-              this.showToast(`Purchased & equipped ${def.name}!`);
-              rebuild();
-            } else {
-              this.showToast(`Need ₹${def.price.toLocaleString()} to buy ${def.name}`);
+        const card = el(
+          'button',
+          {
+            className: 'shop-card',
+            onClick: () => {
+              if (!st.unlocked) {
+                if (spendCash(def.price)) {
+                  weapons.unlock(def.id);
+                  weapons.equip(def.id);
+                  this.showToast(`Purchased & equipped ${def.name}!`);
+                  rebuild();
+                } else {
+                  this.showToast(`Need ₹${def.price.toLocaleString()} to buy ${def.name}`);
+                }
+              } else if (def.category === 'firearm') {
+                if (spendCash(def.ammoPrice)) {
+                  weapons.addAmmo(def.id, def.magSize * 2);
+                  this.showToast(`Refilled ammo for ${def.name}`);
+                  rebuild();
+                } else {
+                  this.showToast(`Need ₹${def.ammoPrice} for ammo`);
+                }
+              } else {
+                weapons.equip(def.id);
+                this.showToast(`Equipped ${def.name}`);
+              }
             }
-          } else if (def.category === 'firearm') {
-            if (spendCash(def.ammoPrice)) {
-              weapons.addAmmo(def.id, def.magSize * 2);
-              this.showToast(`Refilled ammo for ${def.name}`);
-              rebuild();
-            } else {
-              this.showToast(`Need ₹${def.ammoPrice} for ammo`);
-            }
-          } else {
-            weapons.equip(def.id);
-            this.showToast(`Equipped ${def.name}`);
-          }
-        });
+          },
+          el('div', { text: `${def.category.toUpperCase()} • DMG ${def.damage}`, style: { color: '#ff9f2e', fontWeight: '700', fontSize: '11px' } }),
+          el('div', { text: def.name, style: { fontWeight: '700', fontSize: '16px', margin: '2px 0' } }),
+          el('div', { text: actionLabel, style: { fontSize: '12px', color: st.unlocked ? '#4cd137' : '#ffd599' } })
+        );
         this.shopItems.appendChild(card);
       }
     };

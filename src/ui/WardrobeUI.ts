@@ -1,3 +1,4 @@
+import { clearChildren, el } from '../security/SafeDOM';
 import {
   CHARACTER_PRESETS,
   CharacterLoadout,
@@ -87,26 +88,30 @@ export class WardrobeUI {
     this.perkTitleEl.style.color = preset.accent;
     this.perkDescEl.textContent = `${preset.role} — ${preset.perkDesc}`;
 
-    this.gridEl.innerHTML = '';
+    clearChildren(this.gridEl);
 
     if (this.activeTab === 'characters') {
       for (const p of CHARACTER_PRESETS) {
-        const card = document.createElement('button');
-        card.className = `vault-card${this.loadout.presetId === p.id ? ' selected' : ''}`;
-        card.style.borderLeftColor = p.accent;
-        card.innerHTML = `
-          <div class="vc-top">
-            <span class="vc-name">${p.name} <small style="color:${p.accent}">${p.codename}</small></span>
-            <span class="vc-swatch" style="background:${p.accent}"></span>
-          </div>
-          <div class="vc-tag">${p.role}</div>
-          <div class="vc-perk">⚡ ${p.perkTitle}: ${p.perkDesc}</div>
-        `;
-        card.addEventListener('click', () => {
-          this.loadout = { presetId: p.id, ...p.loadout };
-          this.onLoadoutChange?.({ ...this.loadout });
-          this.render();
-        });
+        const card = el(
+          'button',
+          {
+            className: `vault-card${this.loadout.presetId === p.id ? ' selected' : ''}`,
+            style: { borderLeftColor: p.accent },
+            onClick: () => {
+              this.loadout = { presetId: p.id, ...p.loadout };
+              this.onLoadoutChange?.({ ...this.loadout });
+              this.render();
+            }
+          },
+          el(
+            'div',
+            { className: 'vc-top' },
+            el('span', { className: 'vc-name' }, `${p.name} `, el('small', { text: p.codename, style: { color: p.accent } })),
+            el('span', { className: 'vc-swatch', style: { background: p.accent } })
+          ),
+          el('div', { className: 'vc-tag', text: p.role }),
+          el('div', { className: 'vc-perk', text: `⚡ ${p.perkTitle}: ${p.perkDesc}` })
+        );
         this.gridEl.appendChild(card);
       }
       return;
@@ -118,23 +123,27 @@ export class WardrobeUI {
       onPick: (id: T) => void
     ) => {
       for (const item of items) {
-        const card = document.createElement('button');
-        card.className = `vault-card${currentId === item.id ? ' selected' : ''}`;
         const swBg = item.accent
           ? `linear-gradient(135deg, ${item.swatch} 55%, ${item.accent} 100%)`
           : item.swatch;
-        card.innerHTML = `
-          <div class="vc-top">
-            <span class="vc-name">${item.name}</span>
-            <span class="vc-swatch" style="background:${swBg}"></span>
-          </div>
-          <div class="vc-tag">${item.tag}</div>
-        `;
-        card.addEventListener('click', () => {
-          onPick(item.id);
-          this.onLoadoutChange?.({ ...this.loadout });
-          this.render();
-        });
+        const card = el(
+          'button',
+          {
+            className: `vault-card${currentId === item.id ? ' selected' : ''}`,
+            onClick: () => {
+              onPick(item.id);
+              this.onLoadoutChange?.({ ...this.loadout });
+              this.render();
+            }
+          },
+          el(
+            'div',
+            { className: 'vc-top' },
+            el('span', { className: 'vc-name', text: item.name }),
+            el('span', { className: 'vc-swatch', style: { background: swBg } })
+          ),
+          el('div', { className: 'vc-tag', text: item.tag })
+        );
         this.gridEl.appendChild(card);
       }
     };

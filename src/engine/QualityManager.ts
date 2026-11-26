@@ -1,5 +1,6 @@
 import { gameBus } from '../core/EventBus';
 import { HardwareProfile, QualityTier } from './DeviceProfiler';
+import { safeStorageGet, safeStorageSet } from '../security/PrivacyManager';
 
 export type FrameLimitOption = 30 | 60 | 120 | 0; // 0 = uncapped
 export type QualitySelection = 'auto' | QualityTier;
@@ -93,8 +94,7 @@ export class QualityManager {
       powerSaver: false
     };
     try {
-      if (typeof localStorage === 'undefined') return defaults;
-      const raw = localStorage.getItem(PREFS_STORAGE_KEY);
+      const raw = safeStorageGet(PREFS_STORAGE_KEY);
       if (!raw) return defaults;
       const p = JSON.parse(raw);
       return {
@@ -109,13 +109,7 @@ export class QualityManager {
   }
 
   public savePrefs(): void {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(this.prefs));
-      }
-    } catch {
-      // ignore storage errors
-    }
+    safeStorageSet(PREFS_STORAGE_KEY, JSON.stringify(this.prefs));
   }
 
   private resolveInitialTier(): QualityTier {

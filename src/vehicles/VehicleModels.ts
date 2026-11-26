@@ -515,13 +515,13 @@ export function buildVehicleModel(kind: VehicleKind, colorSeed: number): BuiltVe
     wheels.push(wh);
   };
 
-  let name = 'Kaveri GT Coupe';
-  let maxSpeed = 34;
-  let accel = 21;
-  let turnRate = 2.6;
-  let maxHealth = 130;
-  let halfLength = 2.2;
-  let driverPose: DriverPose = 'car';
+  let name: string;
+  let maxSpeed: number;
+  let accel: number;
+  let turnRate: number;
+  let maxHealth: number;
+  let halfLength: number;
+  let driverPose: DriverPose;
 
   if (kind === 'auto') {
     name = 'Bengaluru Auto-Rickshaw';

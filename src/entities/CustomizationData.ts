@@ -1,3 +1,5 @@
+import { safeStorageGet, safeStorageSet } from '../security/PrivacyManager';
+
 export type FaceId = 'seraph_halo' | 'hero_portrait' | 'fixer_beard' | 'cyber_visor' | 'shadow_mask' | 'kingpin_shades' | 'specops_helmet';
 export type DressId = 'seraph_crimson' | 'cognac_bomber' | 'cyber_dj' | 'crimson_hoodie' | 'gold_blazer' | 'viper_biker' | 'tactical_armor' | 'royal_kurta' | 'arctic_trench';
 export type PantsId = 'seraph_ivory' | 'olive_cargo' | 'cyber_joggers' | 'midnight_jeans' | 'kingpin_slacks' | 'desert_camo' | 'viper_track';
@@ -157,16 +159,12 @@ export const DEFAULT_LOADOUT: CharacterLoadout = {
 const LOADOUT_SAVE_KEY = 'garden_city_character_loadout_v2';
 
 export function saveCharacterLoadout(loadout: CharacterLoadout): void {
-  try {
-    localStorage.setItem(LOADOUT_SAVE_KEY, JSON.stringify(loadout));
-  } catch {
-    // ignore
-  }
+  safeStorageSet(LOADOUT_SAVE_KEY, JSON.stringify(loadout));
 }
 
 export function loadCharacterLoadout(): CharacterLoadout {
   try {
-    const raw = localStorage.getItem(LOADOUT_SAVE_KEY);
+    const raw = safeStorageGet(LOADOUT_SAVE_KEY);
     if (!raw) return { ...DEFAULT_LOADOUT };
     const parsed = JSON.parse(raw);
     return {

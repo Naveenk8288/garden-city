@@ -346,7 +346,7 @@ export class EnemyAIManager {
       u.stateTimer -= dt;
       if (u.hitReactTimer > 0) u.hitReactTimer -= dt;
 
-      let moveVec = new THREE.Vector3();
+      const moveVec = new THREE.Vector3();
       let speed = 2.7;
 
       if (u.faction === 'civilian') {

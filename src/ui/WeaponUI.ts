@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AimTargetInfo, CombatHitTarget, WEAPON_DEFS, WeaponId, WeaponSystem } from '../combat/WeaponSystem';
+import { clearChildren, el } from '../security/SafeDOM';
 
 /**
  * Manages the Weapon Wheel (Q / 1-8), Tactical Optical Scope Overlay ([Z] / RMB),
@@ -15,18 +16,11 @@ export class WeaponUI {
   private scopeRangeEl: HTMLElement;
   private scopeBadgeEl: HTMLElement;
   private targetLockEl: HTMLElement;
-  private tlNameEl: HTMLElement;
-  private tlZoneEl: HTMLElement;
-  private tlPosEl: HTMLElement;
   private shotCalloutEl: HTMLElement;
 
   private hitTimer = 0;
-  private calloutTimer = 0;
-  private calloutWorldPos = new THREE.Vector3();
-  private lastShotTarget: CombatHitTarget | null = null;
   private lastShotPos = new THREE.Vector3();
   private lastShotPinTimer = 0;
-  private lastShotHeadshot = false;
   public isOpen = false;
 
   // 3D glowing red tactical laser aim dot placed directly on the exact shot point
@@ -42,9 +36,6 @@ export class WeaponUI {
     this.scopeRangeEl = document.getElementById('scope-rangefinder')!;
     this.scopeBadgeEl = document.getElementById('hud-scope-badge')!;
     this.targetLockEl = document.getElementById('target-lock-hud')!;
-    this.tlNameEl = document.getElementById('tl-name')!;
-    this.tlZoneEl = document.getElementById('tl-zone')!;
-    this.tlPosEl = document.getElementById('tl-pos')!;
     this.shotCalloutEl = document.getElementById('shot-callout')!;
   }
 
@@ -76,9 +67,7 @@ export class WeaponUI {
     distance: number;
   }): void {
     // Keep shooting HUD clean: do not display target person details/coordinates on screen
-    this.lastShotTarget = null;
     this.lastShotPinTimer = 0;
-    this.calloutTimer = 0;
     this.shotCalloutEl.classList.add('hidden');
     this.targetLockEl.classList.add('hidden');
     void info;
@@ -98,11 +87,9 @@ export class WeaponUI {
   }
 
   private renderSlots(weapons: WeaponSystem, onSelect: (id: WeaponId) => void): void {
-    this.slotsEl.innerHTML = '';
+    clearChildren(this.slotsEl);
     for (const def of WEAPON_DEFS) {
       const st = weapons.states.get(def.id)!;
-      const div = document.createElement('div');
-      div.className = `wheel-slot${weapons.currentId === def.id ? ' active' : ''}${st.unlocked ? '' : ' locked'}`;
       const ammoTxt = def.category === 'melee'
         ? `DMG ${def.damage} • MELEE`
         : st.unlocked
@@ -113,14 +100,16 @@ export class WeaponUI {
         def.slot === 10 ? '[0]' :
         def.slot === 11 ? '[-]' :
         def.slot === 12 ? '[=]' : '[Q]';
-      div.innerHTML = `
-        <div class="slot-key">${keyLabel} ${def.subType}</div>
-        <div class="slot-name">${def.name}</div>
-        <div class="slot-meta">${ammoTxt}</div>
-      `;
-      if (st.unlocked) {
-        div.addEventListener('click', () => onSelect(def.id));
-      }
+      const div = el(
+        'div',
+        {
+          className: `wheel-slot${weapons.currentId === def.id ? ' active' : ''}${st.unlocked ? '' : ' locked'}`,
+          onClick: st.unlocked ? () => onSelect(def.id) : undefined
+        },
+        el('div', { className: 'slot-key', text: `${keyLabel} ${def.subType}` }),
+        el('div', { className: 'slot-name', text: def.name }),
+        el('div', { className: 'slot-meta', text: ammoTxt })
+      );
       this.slotsEl.appendChild(div);
     }
   }

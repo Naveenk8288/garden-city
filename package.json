@@ -6,9 +6,12 @@
   "description": "Garden City Underworld — 3D Open-World Action Game set in Bengaluru, India",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && node scripts/check-client-secrets.mjs && vite build && node scripts/check-client-secrets.mjs --dist",
     "preview": "vite preview",
-    "test": "node scripts/test-phase-a.mjs && node scripts/test-phase-1-quality.mjs",
+    "lint:security": "eslint src",
+    "security:secrets": "node scripts/check-client-secrets.mjs && node scripts/check-client-secrets.mjs --dist",
+    "security:hooks": "chmod +x .githooks/pre-commit && git config core.hooksPath .githooks",
+    "test": "node scripts/test-phase-a.mjs && node scripts/test-phase-1-quality.mjs && node scripts/test-phase-1-security.mjs",
     "osm:central": "node scripts/fetch-osm.mjs --zones central,metro,corridors",
     "osm:all": "node scripts/fetch-osm.mjs --zones all"
   },
@@ -17,8 +20,13 @@
     "three": "^0.172.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/three": "^0.172.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-no-unsanitized": "^4.1.5",
+    "eslint-plugin-security": "^4.2.1",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.74.0",
     "vite": "^6.0.11"
   }
 }

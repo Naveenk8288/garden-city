@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "[pre-commit] Running Garden City security checks..."
+
+# 1. Run gitleaks on staged changes if installed
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --config .gitleaks.toml
+else
+  echo "[pre-commit] Note: gitleaks CLI not installed locally (enforced in GitHub Actions CI). Install via: brew install gitleaks"
+fi
+
+# 2. Run built-in client secret scanner
+node scripts/check-client-secrets.mjs
+
+# 3. Run ESLint security rules
+npm run lint:security
