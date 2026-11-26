@@ -154,6 +154,7 @@ class GardenCityGame {
     this.wanted = new WantedSystem();
     this.enemies = new EnemyAIManager(this.scene, this.streamer, this.physics, this.vfx, this.wanted);
     this.vehicles = new VehicleSystem(this.scene, this.streamer, this.physics);
+    this.vehicles.setPlayerLoadout(this.characterLoadout);
     this.missions = new MissionSystem(this.scene, this.enemies, this.wanted, this.vehicles);
 
     // Park iconic starter Bengaluru vehicles neatly along the road ahead of the player
@@ -367,6 +368,7 @@ class GardenCityGame {
       saveCharacterLoadout(newLoadout);
       const newMount = this.player.applyLoadout(newLoadout);
       this.weapons.setMountGroup(newMount);
+      this.vehicles.setPlayerLoadout(newLoadout);
       this.applyCharacterPerks(newLoadout);
     };
 

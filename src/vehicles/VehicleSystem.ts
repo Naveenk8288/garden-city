@@ -3,7 +3,8 @@ import { ChunkStreamer, RoadSegmentData } from '../world/ChunkStreamer';
 import { getZoneAtWorldPos } from '../world/bengaluruData';
 import { InputState } from '../engine/InputManager';
 import { PhysicsWorld } from '../engine/PhysicsWorld';
-import { buildVehicleModel } from './VehicleModels';
+import { buildPlayerDriverForPose, buildVehicleModel, DriverPose } from './VehicleModels';
+import { CharacterLoadout, DEFAULT_LOADOUT } from '../entities/CustomizationData';
 
 export type VehicleKind = 'auto' | 'bike' | 'cab' | 'car' | 'bus' | 'truck' | 'patrol';
 
@@ -66,7 +67,11 @@ export interface VehicleInstance {
   headlights: THREE.Mesh[];
   brakeLights: THREE.Mesh[];
   sirenBar?: { red: THREE.Mesh; blue: THREE.Mesh };
-  riderSeatGroup?: THREE.Group;
+  driverAnchor: THREE.Group;
+  npcDriverGroup: THREE.Group;
+  playerDriverGroup: THREE.Group;
+  driverPose: DriverPose;
+  steeringWheel?: THREE.Object3D;
 }
 
 interface SmokePuff {
@@ -110,6 +115,22 @@ export class VehicleSystem {
   public onCrash?: (event: VehicleCrashEvent) => void;
   public onPlayerBumpedOnFoot?: (damage: number, pushDir: THREE.Vector3, intensity: number) => void;
   private footBumpCooldown = 0;
+  private playerLoadout: CharacterLoadout = { ...DEFAULT_LOADOUT };
+
+  public setPlayerLoadout(loadout: CharacterLoadout): void {
+    this.playerLoadout = { ...loadout };
+    if (this.activeVehicle) {
+      this.refreshPlayerDriverMesh(this.activeVehicle);
+    }
+  }
+
+  private refreshPlayerDriverMesh(v: VehicleInstance): void {
+    while (v.playerDriverGroup.children.length > 0) {
+      v.playerDriverGroup.remove(v.playerDriverGroup.children[0]);
+    }
+    const mesh = buildPlayerDriverForPose(v.driverPose, this.playerLoadout);
+    v.playerDriverGroup.add(mesh);
+  }
 
   constructor(scene: THREE.Scene, streamer: ChunkStreamer, physics: PhysicsWorld) {
     this.scene = scene;
@@ -171,8 +192,15 @@ export class VehicleSystem {
       headlights: built.headlights,
       brakeLights: built.brakeLights,
       sirenBar: built.sirenBar,
-      riderSeatGroup: built.riderSeatGroup
+      driverAnchor: built.driverAnchor,
+      npcDriverGroup: built.npcDriverGroup,
+      playerDriverGroup: built.playerDriverGroup,
+      driverPose: built.driverPose,
+      steeringWheel: built.steeringWheel
     };
+
+    // Moving traffic vehicles ALWAYS have a visible Bengaluru driver inside!
+    veh.npcDriverGroup.visible = isTraffic;
 
     this.vehicles.push(veh);
     return veh;
@@ -195,7 +223,9 @@ export class VehicleSystem {
   public enterVehicle(v: VehicleInstance): void {
     this.activeVehicle = v;
     v.isPlayerControlled = true;
-    if (v.riderSeatGroup) v.riderSeatGroup.visible = true;
+    v.npcDriverGroup.visible = false;
+    this.refreshPlayerDriverMesh(v);
+    v.playerDriverGroup.visible = true;
     if (v.isTraffic) {
       v.isTraffic = false;
       this.onVehicleStolen?.();
@@ -207,7 +237,7 @@ export class VehicleSystem {
     if (!this.activeVehicle) return null;
     const v = this.activeVehicle;
     v.isPlayerControlled = false;
-    if (v.riderSeatGroup) v.riderSeatGroup.visible = false;
+    v.playerDriverGroup.visible = false;
     v.speed *= 0.3;
     this.activeVehicle = null;
     this.playerHeadlightL.intensity = 0;
@@ -371,6 +401,20 @@ export class VehicleSystem {
       const targetRoll = v.steer * -leanMult * Math.min(1, Math.abs(v.speed) / 14);
       v.rollTilt = THREE.MathUtils.lerp(v.rollTilt, targetRoll, dt * 8);
       v.bodyRoot.rotation.set(v.pitchTilt + wobble, 0, v.rollTilt + wobble * 1.4);
+
+      // Animate steering wheel / handlebars and driver head turn when steering!
+      if (v.steeringWheel) {
+        if (v.kind === 'bike' || v.kind === 'auto') {
+          v.steeringWheel.rotation.y = v.steer * 0.38;
+        } else {
+          v.steeringWheel.rotation.z = v.steer * 0.9;
+        }
+      }
+      const activeDriver = v.playerDriverGroup.visible ? v.playerDriverGroup : v.npcDriverGroup.visible ? v.npcDriverGroup : null;
+      const head = activeDriver?.getObjectByName('driverHead');
+      if (head) {
+        head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, v.steer * 0.35, dt * 8);
+      }
     }
 
     if (this.activeVehicle) {
