@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gcu-app-cache-v2';
+const CACHE_NAME = 'gcu-app-cache-v3';
 
 const APP_SHELL = [
   './',
@@ -8,7 +8,8 @@ const APP_SHELL = [
   './gd-sprite.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './icons/n-emblem-splash.png'
 ];
 
 self.addEventListener('install', (event) => {

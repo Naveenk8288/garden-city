@@ -20,9 +20,18 @@ await build({
       } from './src/security/PrivacyManager.ts';
       import { el } from './src/security/SafeDOM.ts';
       import { gdIconHTML } from './src/ui/GDIcon.ts';
+      import {
+        ACCOUNT_STORAGE_KEY,
+        isValidGmailAddress,
+        isValidCallsign,
+        saveStoredAccount,
+        loadStoredAccount
+      } from './src/ui/LaunchSplashAndAuth.ts';
       export const exportsForTest = {
         PrivacyManager, PRIVACY_CONSENT_KEY, isLocalStoragePermitted,
-        safeStorageGet, safeStorageSet, el, gdIconHTML
+        safeStorageGet, safeStorageSet, el, gdIconHTML,
+        ACCOUNT_STORAGE_KEY, isValidGmailAddress, isValidCallsign,
+        saveStoredAccount, loadStoredAccount
       };
     `,
     resolveDir: process.cwd(),
@@ -48,7 +57,9 @@ globalThis.localStorage = {
 const { exportsForTest } = await import(scratchBundle);
 const {
   PrivacyManager, PRIVACY_CONSENT_KEY, isLocalStoragePermitted,
-  safeStorageGet, safeStorageSet, el, gdIconHTML
+  safeStorageGet, safeStorageSet, el, gdIconHTML,
+  ACCOUNT_STORAGE_KEY, isValidGmailAddress, isValidCallsign,
+  saveStoredAccount, loadStoredAccount
 } = exportsForTest;
 
 // 1. PrivacyManager consent, session-only blocking, export JSON & full delete (DPDP Act 2023 / GDPR)
@@ -148,6 +159,35 @@ const {
     assert.ok(fs.existsSync(rel), `Missing required Phase 1 security file: ${rel}`);
   }
   console.log('✓ Test 4: All Phase 1 security artifacts & CI hooks verified');
+}
+
+// 5. Gmail Create Account & Login validation + erasure via PrivacyManager
+{
+  assert.equal(isValidGmailAddress('naveen.blr@gmail.com'), true);
+  assert.equal(isValidGmailAddress('player@yahoo.com'), false, 'Non-Gmail addresses must be rejected');
+  assert.equal(isValidGmailAddress('<script>@gmail.com'), false, 'Malicious characters in Gmail must be rejected');
+  assert.equal(isValidCallsign('Naveen_BLR'), true);
+  assert.equal(isValidCallsign('<img src=x>'), false, 'HTML tags in callsign must be rejected');
+
+  const pm = new PrivacyManager(false);
+  pm.setConsent('accepted');
+  const now = new Date().toISOString();
+  saveStoredAccount({
+    callsign: 'Naveen_BLR',
+    gmail: 'naveen.blr@gmail.com',
+    authMode: 'gmail_local',
+    verifiedByGoogle: false,
+    createdAt: now,
+    lastLoginAt: now
+  });
+  const loaded = loadStoredAccount();
+  assert.equal(loaded?.gmail, 'naveen.blr@gmail.com');
+  assert.equal(loaded?.callsign, 'Naveen_BLR');
+
+  const del = await pm.deleteAllUserData();
+  assert.ok(del.deletedKeys.includes(ACCOUNT_STORAGE_KEY), 'Account must be erased on Delete My Account & Data');
+  assert.equal(loadStoredAccount(), null);
+  console.log('✓ Test 5: Gmail account validation, persistence & DPDP/GDPR account erasure passed');
 }
 
 console.log('\nALL PHASE 1 SECURITY FOUNDATION TESTS PASSED!');

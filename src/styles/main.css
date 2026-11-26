@@ -833,74 +833,85 @@ html, body, #game-root {
   background: linear-gradient(90deg, #ff6b35, #2ecc71);
 }
 
-/* Bottom center prompts & subtitles */
+/* Top-corner compact small-font gameplay messages, prompts, subtitles & instructions */
 .hud-bottom-center {
   position: absolute;
-  bottom: 44px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: max(46px, calc(env(safe-area-inset-top) + 38px));
+  left: 252px;
+  bottom: auto;
+  transform: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  max-width: 620px;
+  align-items: flex-start;
+  gap: 5px;
+  max-width: min(420px, 40vw);
+  z-index: 26;
 }
 
 .interact-prompt {
-  padding: 8px 18px;
-  border-radius: 99px;
-  background: rgba(12, 17, 29, 0.9);
-  border: 1px solid var(--accent);
-  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: rgba(11, 15, 26, 0.86);
+  border: 1px solid rgba(255, 176, 32, 0.65);
+  border-left: 3px solid #FFB020;
+  font-size: 10.5px;
+  line-height: 1.35;
   font-weight: 600;
-  color: #fff;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  color: #f8fafc;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
 .hud-toast {
-  padding: 8px 16px;
-  border-radius: 8px;
-  background: rgba(255, 140, 35, 0.92);
-  color: #0b0e16;
-  font-weight: 700;
-  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(11, 15, 26, 0.9);
+  border: 1px solid #00E5C3;
+  border-left: 3px solid #FF2E88;
+  color: #f8fafc;
+  font-weight: 600;
+  font-size: 10.5px;
+  line-height: 1.35;
 }
 
 .subtitle-box {
-  background: rgba(6, 10, 18, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-  padding: 8px 16px;
-  text-align: center;
+  background: rgba(11, 15, 26, 0.84);
+  border: 1px solid rgba(0, 229, 195, 0.28);
+  border-radius: 7px;
+  padding: 5px 10px;
+  text-align: left;
 }
 
 .sub-speaker {
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 700;
-  color: var(--accent);
+  color: #FFB020;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
 }
 
 .sub-text {
-  font-size: 14px;
-  line-height: 1.4;
-  color: #f8fafc;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: #e2e8f0;
 }
 
 .controls-strip {
   position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: max(12px, env(safe-area-inset-top));
+  left: 252px;
+  bottom: auto;
+  transform: none;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  padding: 4px 14px;
-  border-radius: 8px;
-  background: rgba(8, 12, 20, 0.65);
-  font-size: 10.5px;
+  justify-content: flex-start;
+  gap: 5px 8px;
+  max-width: min(520px, 46vw);
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: rgba(11, 15, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 9.5px;
+  line-height: 1.25;
   color: var(--muted);
 }
 
@@ -2206,7 +2217,20 @@ body.touch-active .controls-strip {
     display: none;
   }
   .hud-bottom-center {
-    bottom: 162px;
+    top: max(54px, calc(env(safe-area-inset-top) + 46px));
+    left: max(8px, env(safe-area-inset-left));
+    bottom: auto;
+    max-width: 58vw;
+  }
+  .interact-prompt, .hud-toast, .sub-text {
+    font-size: 9.5px;
+    padding: 3px 8px;
+  }
+  .sub-speaker {
+    font-size: 8.5px;
+  }
+  .controls-strip {
+    display: none;
   }
   .install-platform-grid, .settings-grid {
     grid-template-columns: 1fr;
@@ -2342,4 +2366,249 @@ body.touch-active .controls-strip {
 .gd-btn-danger:hover {
   background: #FF2E88;
   color: #0B0F1A;
+}
+
+/* ================= 360° BULLET LAUNCH SPLASH & ORIGINAL GMAIL AUTH ================= */
+.gcu-hud-account-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: rgba(11, 15, 26, 0.72);
+  border: 1px solid rgba(0, 229, 195, 0.35);
+  color: #00E5C3;
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gcu-launch-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background: #0B0F1A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.gcu-splash-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.gcu-splash-center {
+  position: relative;
+  z-index: 2;
+  transform: translateY(-4vh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.gcu-splash-emblem {
+  width: min(44vw, 210px);
+  height: min(44vw, 210px);
+  object-fit: contain;
+  filter: drop-shadow(0 0 26px rgba(255, 176, 32, 0.55)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.35));
+  animation: gcuEmblemPulse 2.5s ease-out forwards;
+}
+
+@keyframes gcuEmblemPulse {
+  0% { transform: scale(0.55) rotate(-14deg); opacity: 0; }
+  22% { transform: scale(1.06) rotate(2deg); opacity: 1; }
+  48% { transform: scale(0.98) rotate(0deg); opacity: 1; }
+  58% { transform: scale(1.1) rotate(0deg); filter: drop-shadow(0 0 42px rgba(255, 176, 32, 0.92)); }
+  100% { transform: scale(1.0) rotate(0deg); opacity: 1; }
+}
+
+.gcu-splash-caption {
+  position: absolute;
+  bottom: max(46px, calc(env(safe-area-inset-bottom) + 32px));
+  left: 0;
+  right: 0;
+  z-index: 3;
+  text-align: center;
+  pointer-events: none;
+}
+
+.gcu-splash-brand {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: clamp(22px, 6vw, 34px);
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #f8fafc;
+  text-shadow: 0 0 22px rgba(255, 176, 32, 0.45);
+}
+
+.gcu-splash-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  color: #00E5C3;
+}
+
+.gcu-auth-overlay {
+  z-index: 130;
+  background: rgba(6, 10, 18, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.gcu-auth-card {
+  width: 460px;
+  max-width: 94vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: rgba(11, 15, 26, 0.98);
+  border: 1px solid rgba(0, 229, 195, 0.45);
+  border-top: 3px solid #FFB020;
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.85);
+}
+
+.gcu-auth-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.gcu-auth-emblem {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px rgba(255, 176, 32, 0.45));
+  flex-shrink: 0;
+}
+
+.gcu-auth-kicker {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  color: #00E5C3;
+}
+
+.gcu-auth-head h2 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 26px;
+  color: #FFB020;
+  line-height: 1.05;
+}
+
+.gcu-auth-desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin-bottom: 14px;
+}
+
+.gcu-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.gcu-auth-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.gcu-auth-input {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.gcu-auth-input:focus {
+  border-color: #00E5C3;
+  box-shadow: 0 0 0 2px rgba(0, 229, 195, 0.22);
+}
+
+.gcu-auth-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.gcu-auth-error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 46, 136, 0.18);
+  border: 1px solid #FF2E88;
+  color: #ffd6e7;
+  font-size: 12px;
+}
+
+.gcu-account-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(0, 229, 195, 0.1);
+  border: 1px solid rgba(0, 229, 195, 0.4);
+}
+
+.gcu-pill-name {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.gcu-pill-mail {
+  font-size: 11.5px;
+  color: #00E5C3;
+}
+
+.gcu-google-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gcu-google-btn-host {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.gcu-oauth-hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #fde68a;
+  background: rgba(255, 176, 32, 0.1);
+  border: 1px solid rgba(255, 176, 32, 0.32);
+  border-radius: 8px;
+  padding: 7px 10px;
+  width: 100%;
+}
+
+.gcu-auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }

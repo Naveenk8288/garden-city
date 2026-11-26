@@ -68,6 +68,7 @@ All current game data is stored **strictly on the player's own device** (and is 
 | Storage Key / Store | Contents | Purpose | Transmitted Off-Device? | User Control |
 |---|---|---|---|---|
 | `garden_city_privacy_consent_v1` | Consent choice (`accepted` or `session_only`) & timestamp | Honor DPDP Act 2023 / GDPR storage preference | Never | Change anytime / Delete |
+| `garden_city_account_v1` | Player callsign & original Gmail address (no passwords or session tokens) | Show Create Account on first launch, then Gmail Login | Verified via Google OIDC (`/api/auth/google`) when Google OAuth is enabled | Export JSON / Delete |
 | `garden_city_underworld_save_v1` | Fictional game cash, respect, owned zones, completed missions, unlocked weapons | Single-player save progress | Never | Export JSON / Delete |
 | `garden_city_character_loadout_v2` | Selected fictional hero preset, face, outfit, pants, shoes | Remember player avatar customization | Never | Export JSON / Delete |
 | `garden_city_campaign_v1` | Story chapter progress, Loyalty/Power reputation, unlocked ending | Single-player campaign state | Never | Export JSON / Delete |

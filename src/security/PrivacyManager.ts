@@ -13,6 +13,7 @@ export const PRIVACY_CONSENT_KEY = 'garden_city_privacy_consent_v1';
 
 export const KNOWN_LOCAL_STORAGE_KEYS = [
   'garden_city_privacy_consent_v1',
+  'garden_city_account_v1',
   'garden_city_underworld_save_v1',
   'garden_city_character_loadout_v2',
   'garden_city_campaign_v1',
@@ -463,6 +464,7 @@ export class PrivacyManager {
 
     const descriptions = new Map<string, string>([
       ['garden_city_privacy_consent_v1', 'Privacy consent preference'],
+      ['garden_city_account_v1', 'Player callsign & Gmail account profile (no password/token)'],
       ['garden_city_underworld_save_v1', 'Single-player cash, turf & unlocked weapons'],
       ['garden_city_character_loadout_v2', 'Selected avatar outfit & character preset'],
       ['garden_city_campaign_v1', '8-chapter story choices & mission progress'],

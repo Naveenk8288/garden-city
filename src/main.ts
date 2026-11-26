@@ -36,6 +36,7 @@ import { AppInstallManager } from './ui/AppInstallManager';
 import { TouchControlsUI, TouchModePref } from './ui/TouchControlsUI';
 import { PrivacyManager, safeStorageGet, safeStorageSet } from './security/PrivacyManager';
 import { clearChildren, el } from './security/SafeDOM';
+import { LaunchSplashAndAuth } from './ui/LaunchSplashAndAuth';
 import {
   CharacterLoadout,
   loadCharacterLoadout,
@@ -89,6 +90,7 @@ class GardenCityGame {
   private appInstall = new AppInstallManager();
   private touchControls = new TouchControlsUI();
   private privacy = new PrivacyManager(true);
+  private launchAuth = new LaunchSplashAndAuth(true);
   private characterLoadout: CharacterLoadout = loadCharacterLoadout();
   private lastFps = 60;
 
@@ -192,6 +194,10 @@ class GardenCityGame {
 
   public async boot(): Promise<void> {
     if (!this.webgl2Ready) return;
+
+    // Play 360° bullet-firing emblem launch animation immediately on app open,
+    // then show Create Account (or Gmail Login if already created) while assets finish loading!
+    this.launchAuth.startLaunchFlow();
 
     const urlParams = new URLSearchParams(window.location.search);
     const safeLiteMode = urlParams.get('safeLite') === '1';
@@ -906,7 +912,9 @@ class GardenCityGame {
       this.cutscenes.isPlaying ||
       this.debugPanel.isOpen ||
       this.appInstall.isModalOpen ||
-      this.privacy.isModalOpen;
+      this.privacy.isModalOpen ||
+      this.launchAuth.isSplashOpen ||
+      this.launchAuth.isAuthOpen;
     this.input.uiBlocked = anyModal;
     if (anyModal) {
       this.input.releasePointerLock();
@@ -1031,6 +1039,20 @@ class GardenCityGame {
     });
     this.privacy.onModalToggle = () => this.syncUIBlockState();
     this.privacy.onNotify = (msg) => this.shopMetroUI.showToast(msg, 4.2);
+    this.privacy.onDataDeleted = () => {
+      this.launchAuth.currentAccount = null;
+      this.syncAccountBadge();
+    };
+
+    document.querySelectorAll('[data-account-btn]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.launchAuth.openAuthGate();
+      });
+    });
+    this.launchAuth.onModalToggle = () => this.syncUIBlockState();
+    this.launchAuth.onNotify = (msg) => this.shopMetroUI.showToast(msg, 4.2);
+    this.launchAuth.onAuthComplete = () => this.syncAccountBadge();
+    this.syncAccountBadge();
 
     document.querySelectorAll('[data-install-app-btn]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1047,6 +1069,19 @@ class GardenCityGame {
     (document.getElementById('set-scope-mode') as HTMLSelectElement)?.addEventListener('change', (e) => {
       this.scopeMode = (e.target as HTMLSelectElement).value as 'toggle' | 'auto';
       this.manualScopeOn = false;
+    });
+  }
+
+  private syncAccountBadge(): void {
+    const pill = document.getElementById('hud-account-pill');
+    const btns = document.querySelectorAll<HTMLButtonElement>('[data-account-btn]');
+    const acc = this.launchAuth.currentAccount;
+    if (pill) {
+      pill.textContent = acc ? `👤 ${acc.callsign} • ${acc.gmail}` : 'Guest (Offline)';
+      pill.classList.toggle('hidden', !acc);
+    }
+    btns.forEach((b) => {
+      b.textContent = acc ? `GMAIL: ${acc.callsign.toUpperCase()}` : 'CREATE GMAIL ACCOUNT';
     });
   }
 
@@ -1287,7 +1322,9 @@ class GardenCityGame {
 
     if (this.started) {
       if (input.pauseTogglePressed) {
-        if (this.privacy.isModalOpen) {
+        if (this.launchAuth.isAuthOpen) {
+          this.launchAuth.closeAuthGate();
+        } else if (this.privacy.isModalOpen) {
           this.privacy.setModalOpen(false);
         } else if (this.appInstall.isModalOpen) {
           this.appInstall.setModalOpen(false);
