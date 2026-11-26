@@ -75,17 +75,13 @@ export class WeaponUI {
     isHeadshot: boolean;
     distance: number;
   }): void {
-    this.lastShotTarget = info.target;
-    this.lastShotPos.copy(info.hitPoint);
-    this.lastShotPinTimer = 3.6;
-    this.lastShotHeadshot = info.isHeadshot;
-
-    this.calloutWorldPos.copy(info.hitPoint).add(new THREE.Vector3(0, 0.35, 0));
-    this.calloutTimer = 1.25;
-    const tag = info.isHeadshot ? 'HEADSHOT!' : 'HIT';
-    this.shotCalloutEl.textContent = `-${Math.round(info.damage)} ${tag} • ${info.distance.toFixed(1)}m • POS (${Math.round(info.hitPoint.x)}, ${Math.round(info.hitPoint.z)})`;
-    this.shotCalloutEl.classList.toggle('headshot', info.isHeadshot);
-    this.shotCalloutEl.classList.remove('hidden');
+    // Keep shooting HUD clean: do not display target person details/coordinates on screen
+    this.lastShotTarget = null;
+    this.lastShotPinTimer = 0;
+    this.calloutTimer = 0;
+    this.shotCalloutEl.classList.add('hidden');
+    this.targetLockEl.classList.add('hidden');
+    void info;
   }
 
   public getPinnedShotWorldPos(): THREE.Vector3 | null {
@@ -134,19 +130,12 @@ export class WeaponUI {
     scopeZoom: number,
     aimInfo: { aimTarget: AimTargetInfo | null; worldPoint: THREE.Vector3 | null; worldDist: number }
   ): void {
-    // 1. Optical Scope Overlay & Rangefinder
+    // 1. Optical Scope Overlay & Clean Rangefinder (no other person details)
     this.scopeOverlayEl.classList.toggle('hidden', !isScoped);
     this.crosshairEl.classList.toggle('hidden', isScoped);
     if (isScoped) {
       this.scopeZoomEl.textContent = `OPTICAL SCOPE • ${scopeZoom.toFixed(1)}x`;
-      if (aimInfo.aimTarget) {
-        const t = aimInfo.aimTarget;
-        const zoneStr = t.isHeadshot ? 'HEADSHOT LOCK' : 'BODY LOCK';
-        this.scopeRangeEl.textContent =
-          `TARGET: ${t.target.label || 'PERSON'} • ${zoneStr} • DIST: ${t.distance.toFixed(1)}m • POS X ${Math.round(t.target.position.x)}, Z ${Math.round(t.target.position.z)}`;
-      } else {
-        this.scopeRangeEl.textContent = `RANGE: ${aimInfo.worldDist.toFixed(1)}m • SCANNING...`;
-      }
+      this.scopeRangeEl.textContent = `RANGE: ${aimInfo.worldDist.toFixed(1)}m`;
     }
 
     // Scope HUD indicator pill
@@ -161,9 +150,9 @@ export class WeaponUI {
       this.scopeBadgeEl.classList.remove('active');
     }
 
-    // 2. 3D Red Laser Aim Dot on exact target/wall point when aiming or scoped with firearm
+    // 2. 3D Red Laser Aim Dot on exact aim point when aiming or scoped with firearm
     if (this.laserDot) {
-      if (isFirearm && (isAiming || isScoped || aimInfo.aimTarget) && aimInfo.worldPoint) {
+      if (isFirearm && (isAiming || isScoped) && aimInfo.worldPoint) {
         this.laserDot.visible = true;
         this.laserDot.position.copy(aimInfo.worldPoint);
         const s = Math.max(0.7, Math.min(2.2, aimInfo.worldDist * 0.035));
@@ -173,69 +162,12 @@ export class WeaponUI {
       }
     }
 
-    // 3. On-Person Target Lock & Exact Shooting Position Bracket
-    if (this.lastShotPinTimer > 0) this.lastShotPinTimer -= dt;
-
-    let displayTarget: CombatHitTarget | null = null;
-    let displayHitPoint: THREE.Vector3 | null = null;
-    let displayDist = 0;
-    let displayHeadshot = false;
-
-    if (aimInfo.aimTarget) {
-      displayTarget = aimInfo.aimTarget.target;
-      displayHitPoint = aimInfo.aimTarget.hitPoint;
-      displayDist = aimInfo.aimTarget.distance;
-      displayHeadshot = aimInfo.aimTarget.isHeadshot;
-    } else if (this.lastShotPinTimer > 0 && this.lastShotTarget && (this.lastShotTarget.health ?? 1) > 0) {
-      displayTarget = this.lastShotTarget;
-      displayHitPoint = this.lastShotTarget.position.clone().add(new THREE.Vector3(0, 1.3, 0));
-      displayDist = displayHitPoint.distanceTo(playerPos);
-      displayHeadshot = this.lastShotHeadshot;
-    }
-
-    if (displayTarget && displayHitPoint) {
-      const worldCenter = new THREE.Vector3(
-        displayTarget.position.x,
-        displayTarget.position.y + displayTarget.height * 0.6,
-        displayTarget.position.z
-      );
-      const proj = worldCenter.clone().project(camera);
-      if (proj.z < 1 && proj.x > -1.05 && proj.x < 1.05 && proj.y > -1.05 && proj.y < 1.05) {
-        const sx = (proj.x * 0.5 + 0.5) * window.innerWidth;
-        const sy = (-proj.y * 0.5 + 0.5) * window.innerHeight;
-        this.targetLockEl.style.left = `${sx}px`;
-        this.targetLockEl.style.top = `${sy}px`;
-        this.targetLockEl.classList.remove('hidden');
-        this.targetLockEl.classList.toggle('headlock', displayHeadshot);
-        this.targetLockEl.classList.toggle('hitflash', this.hitTimer > 0);
-
-        const hpTxt =
-          typeof displayTarget.health === 'number' && typeof displayTarget.maxHealth === 'number'
-            ? ` • HP ${Math.ceil(displayTarget.health)}/${displayTarget.maxHealth}`
-            : '';
-        this.tlNameEl.textContent = `${displayTarget.label || 'PERSON'}${hpTxt}`;
-        this.tlZoneEl.textContent = displayHeadshot ? '🎯 HEADSHOT POSITION' : '🎯 SHOOTING TARGET (BODY)';
-        this.tlPosEl.textContent = `${displayDist.toFixed(1)}m • POS X ${Math.round(displayTarget.position.x)}, Z ${Math.round(displayTarget.position.z)}`;
-      } else {
-        this.targetLockEl.classList.add('hidden');
-      }
-    } else {
-      this.targetLockEl.classList.add('hidden');
-    }
-
-    // 4. Floating Shot Damage + Position Callout
-    if (this.calloutTimer > 0) {
-      this.calloutTimer -= dt;
-      this.calloutWorldPos.y += dt * 0.6;
-      const proj = this.calloutWorldPos.clone().project(camera);
-      if (proj.z < 1) {
-        this.shotCalloutEl.style.left = `${(proj.x * 0.5 + 0.5) * window.innerWidth}px`;
-        this.shotCalloutEl.style.top = `${(-proj.y * 0.5 + 0.5) * window.innerHeight}px`;
-      }
-      if (this.calloutTimer <= 0) {
-        this.shotCalloutEl.classList.add('hidden');
-      }
-    }
+    // 3. Keep target-lock person details & shot coordinate callouts hidden
+    this.targetLockEl.classList.add('hidden');
+    this.shotCalloutEl.classList.add('hidden');
+    void dt;
+    void camera;
+    void playerPos;
   }
 
   public update(dt: number, weapons: WeaponSystem, isAiming: boolean): void {
