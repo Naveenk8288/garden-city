@@ -129,8 +129,9 @@ export class ProceduralTextures {
     ctx.fillRect(180, 0, 180, size);
     ctx.fillRect(664, 0, 180, size);
 
-    // Fine aggregate micro-grain (high-DPI crispness!)
-    for (let i = 0; i < 16000; i++) {
+    // Fine aggregate micro-grain (scaled down cleanly on 512px mobile textures for fast boot!)
+    const grainCount = this.textureSizeCap <= 512 ? 1800 : 12000;
+    for (let i = 0; i < grainCount; i++) {
       const v = 22 + ((i * 73) % 34);
       ctx.fillStyle = `rgb(${v},${v + 2},${v + 5})`;
       ctx.fillRect((i * 197) % size, (i * 419) % size, 2, 2);
@@ -250,7 +251,8 @@ export class ProceduralTextures {
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = '#295b32';
     ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 9000; i++) {
+    const grassDots = this.textureSizeCap <= 512 ? 1400 : 7500;
+    for (let i = 0; i < grassDots; i++) {
       const g = 72 + ((i * 53) % 52);
       ctx.fillStyle = `rgb(${28 + (i % 20)},${g},${32 + (i % 18)})`;
       ctx.fillRect((i * 97) % size, (i * 181) % size, 3, 3);
@@ -317,7 +319,8 @@ export class ProceduralTextures {
     ctx.fillRect(0, 0, size, size);
 
     // Architectural surface grain & monsoon rain streaking
-    for (let i = 0; i < 8000; i++) {
+    const facadeDots = this.textureSizeCap <= 512 ? 1000 : 6000;
+    for (let i = 0; i < facadeDots; i++) {
       ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.045)';
       ctx.fillRect((i * 157) % size, (i * 311) % size, 3, 5);
     }

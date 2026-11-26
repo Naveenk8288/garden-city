@@ -132,14 +132,14 @@ export class QualityManager {
       return {
         tier: 'lite',
         targetFps: 30,
-        baseRenderScale: isPhone ? 0.78 : 0.75,
+        baseRenderScale: isPhone ? 0.72 : 0.75,
         maxDpr: 2, // Capped at 2 for LITE
-        shadowMapSize: 1024,
-        shadowsEnabled: true,
-        drawDistance: 1200,
+        shadowMapSize: isPhone ? 512 : 1024,
+        shadowsEnabled: !isPhone, // Keep budget 3GB Android GPUs fast & crash-free
+        drawDistance: isPhone ? 900 : 1200,
         chunkRadius: 1,
-        maxTraffic: 10,
-        maxNpcs: 10,
+        maxTraffic: isPhone ? 8 : 10,
+        maxNpcs: isPhone ? 8 : 10,
         particleScale: 0.35,
         textureSizeCap: 512,
         postMode: 'none', // Tone mapping only
@@ -152,17 +152,17 @@ export class QualityManager {
       return {
         tier: 'medium',
         targetFps: isPhone ? 45 : 60,
-        baseRenderScale: isPhone ? 0.88 : 0.95,
+        baseRenderScale: isPhone ? 0.85 : 0.95,
         maxDpr: isMacRetina ? 2 : 2, // Explicitly capped at 2 for MacBook Retina on MEDIUM
-        shadowMapSize: 2048,
+        shadowMapSize: isPhone ? 1024 : 2048,
         shadowsEnabled: true,
-        drawDistance: 2100,
-        chunkRadius: 2,
-        maxTraffic: 20,
-        maxNpcs: 18,
+        drawDistance: isPhone ? 1400 : 2100,
+        chunkRadius: isPhone ? 1 : 2, // 3x3 chunks on phones keeps mobile RAM low & startup fast
+        maxTraffic: isPhone ? 14 : 20,
+        maxNpcs: isPhone ? 12 : 18,
         particleScale: 0.7,
-        textureSizeCap: 1024,
-        postMode: 'medium',
+        textureSizeCap: isPhone ? 512 : 1024,
+        postMode: isPhone ? 'none' : 'medium',
         reflections: !isPhone,
         maxAudioVoices: 24
       };
@@ -174,14 +174,14 @@ export class QualityManager {
       targetFps: highRefresh ? 120 : 60,
       baseRenderScale: 1.0,
       maxDpr: isPhone ? 3 : 2, // 3 ONLY on HIGH phones
-      shadowMapSize: 4096,
+      shadowMapSize: isPhone ? 1024 : 4096,
       shadowsEnabled: true,
-      drawDistance: 3200,
-      chunkRadius: 2,
-      maxTraffic: 34,
-      maxNpcs: 28,
-      particleScale: 1.0,
-      textureSizeCap: 2048,
+      drawDistance: isPhone ? 1800 : 3200,
+      chunkRadius: isPhone ? 1 : 2,
+      maxTraffic: isPhone ? 18 : 34,
+      maxNpcs: isPhone ? 16 : 28,
+      particleScale: isPhone ? 0.8 : 1.0,
+      textureSizeCap: isPhone ? 1024 : 2048,
       postMode: 'high',
       reflections: !isPhone, // Desktop Windows/Mac only, never on phones!
       maxAudioVoices: 32

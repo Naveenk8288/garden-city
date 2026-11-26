@@ -12,7 +12,7 @@ export class EnvironmentSystem {
 
   private scene: THREE.Scene;
   private renderer: THREE.WebGLRenderer;
-  private pmrem: THREE.PMREMGenerator;
+  private pmrem: THREE.PMREMGenerator | null = null;
   private envRT: THREE.WebGLRenderTarget | null = null;
   private lastEnvBucket = -1;
 
@@ -40,11 +40,19 @@ export class EnvironmentSystem {
   public windowMaterials: THREE.MeshStandardMaterial[] = [];
   public streetLightMaterials: THREE.MeshStandardMaterial[] = [];
 
-  constructor(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
+  constructor(scene: THREE.Scene, renderer: THREE.WebGLRenderer, mobileSafe = false) {
     this.scene = scene;
     this.renderer = renderer;
-    this.pmrem = new THREE.PMREMGenerator(renderer);
-    this.pmrem.compileEquirectangularShader();
+    this.reflectionsEnabled = !mobileSafe;
+    if (!mobileSafe) {
+      try {
+        this.pmrem = new THREE.PMREMGenerator(renderer);
+        this.pmrem.compileEquirectangularShader();
+      } catch {
+        this.pmrem = null;
+        this.reflectionsEnabled = false;
+      }
+    }
 
     this.fog = new THREE.FogExp2(0xaed4ec, 0.00055);
     this.scene.fog = this.fog;
@@ -89,10 +97,11 @@ export class EnvironmentSystem {
     this.skyMesh = new THREE.Mesh(new THREE.SphereGeometry(2800, 24, 16), this.skyMat);
     this.scene.add(this.skyMesh);
 
-    // Primary Sun / Moon shadow-casting light
+    // Primary Sun / Moon shadow-casting light (compact initial map size on mobile to avoid VRAM spike)
     this.sunLight = new THREE.DirectionalLight(0xffba78, 2.4);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(2048, 2048);
+    const initShadowSize = mobileSafe ? 512 : 1024;
+    this.sunLight.shadow.mapSize.set(initShadowSize, initShadowSize);
     this.sunLight.shadow.camera.near = 5;
     this.sunLight.shadow.camera.far = 260;
     const s = 95;
@@ -115,7 +124,9 @@ export class EnvironmentSystem {
     this.scene.add(this.lightningLight);
 
     this.initRainSystem();
-    this.rebuildHDRIEnvironment(this.skyMat.uniforms.uTopColor.value, this.skyMat.uniforms.uHorizonColor.value);
+    if (this.reflectionsEnabled) {
+      this.rebuildHDRIEnvironment(this.skyMat.uniforms.uTopColor.value, this.skyMat.uniforms.uHorizonColor.value);
+    }
   }
 
   private initRainSystem(): void {
@@ -188,6 +199,16 @@ export class EnvironmentSystem {
   }
 
   private rebuildHDRIEnvironment(top: THREE.Color, horizon: THREE.Color): void {
+    if (!this.reflectionsEnabled) return;
+    if (!this.pmrem) {
+      try {
+        this.pmrem = new THREE.PMREMGenerator(this.renderer);
+        this.pmrem.compileEquirectangularShader();
+      } catch {
+        this.reflectionsEnabled = false;
+        return;
+      }
+    }
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 128;

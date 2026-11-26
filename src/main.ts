@@ -5,7 +5,7 @@ import { EnvironmentSystem, WeatherMode } from './engine/EnvironmentSystem';
 import { PostProcessingPipeline } from './engine/PostProcessing';
 import {
   HardwareProfile,
-  checkGraphicsSupport,
+  detectPlatform,
   loadSavedHardwareProfile,
   runHardwareBenchmark
 } from './engine/DeviceProfiler';
@@ -56,6 +56,8 @@ class GardenCityGame {
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private webgl2Ready = false;
+  private contextLost = false;
+  private isMobileDevice = false;
 
   private physics = new PhysicsWorld();
   private quality!: QualityManager;
@@ -105,39 +107,70 @@ class GardenCityGame {
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.minimapCtx = (document.getElementById('minimap-canvas') as HTMLCanvasElement).getContext('2d')!;
+    this.isMobileDevice = detectPlatform().isMobile;
 
-    // Verify WebGL2 before creating Three.js WebGLRenderer (shows friendly fallback screen if missing)
-    const support = checkGraphicsSupport();
-    if (!support.webgl2Supported) {
+    // Create a WebGL2 context directly on the main canvas (avoids spawning extra throwaway contexts
+    // on Android phones, and retries with mobile-safe default attributes if high-performance is rejected)
+    const createSafeRenderer = (): THREE.WebGLRenderer | null => {
+      const attempts: THREE.WebGLRendererParameters[] = this.isMobileDevice
+        ? [
+            { canvas: this.canvas, antialias: false, powerPreference: 'default', failIfMajorPerformanceCaveat: false },
+            { canvas: this.canvas, antialias: false, alpha: false, depth: true, stencil: false }
+          ]
+        : [
+            { canvas: this.canvas, antialias: true, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false },
+            { canvas: this.canvas, antialias: false, powerPreference: 'default', failIfMajorPerformanceCaveat: false }
+          ];
+
+      for (const opts of attempts) {
+        try {
+          const gl = this.canvas.getContext('webgl2', {
+            antialias: opts.antialias,
+            powerPreference: opts.powerPreference,
+            failIfMajorPerformanceCaveat: false
+          }) as WebGL2RenderingContext | null;
+          if (!gl) continue;
+          return new THREE.WebGLRenderer({ ...opts, context: gl });
+        } catch {
+          // try next fallback config
+        }
+      }
+      return null;
+    };
+
+    const created = createSafeRenderer();
+    if (!created) {
       document.getElementById('title-screen')?.classList.add('hidden');
       document.getElementById('webgl2-error-screen')?.classList.remove('hidden');
       return;
     }
 
-    try {
-      this.renderer = new THREE.WebGLRenderer({
-        canvas: this.canvas,
-        antialias: true,
-        powerPreference: 'high-performance'
-      });
-    } catch {
-      document.getElementById('title-screen')?.classList.add('hidden');
-      document.getElementById('webgl2-error-screen')?.classList.remove('hidden');
-      return;
-    }
-
+    this.renderer = created;
     this.webgl2Ready = true;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isMobileDevice ? 1.5 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = this.isMobileDevice ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+    // Graceful Android/iOS GPU context loss recovery
+    this.canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.contextLost = true;
+      this.shopMetroUI?.showToast('Graphics paused by device — recovering...', 3.5);
+    });
+    this.canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      this.quality?.applyNow('context_restored');
+      this.shopMetroUI?.showToast('Graphics restored!', 2.0);
+    });
+
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 3200);
+    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, this.isMobileDevice ? 1400 : 3200);
 
     window.addEventListener('resize', () => {
       if (!this.webgl2Ready) return;
-      this.camera.aspect = window.innerWidth / window.innerHeight;
+      this.camera.aspect = Math.max(1, window.innerWidth) / Math.max(1, window.innerHeight);
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       if (this.quality) {
@@ -157,6 +190,9 @@ class GardenCityGame {
   public async boot(): Promise<void> {
     if (!this.webgl2Ready) return;
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const safeLiteMode = urlParams.get('safeLite') === '1';
+
     this.setLoadProgress('Detecting device hardware & graphics capabilities...', 8);
     let profile: HardwareProfile | null = loadSavedHardwareProfile();
     if (!profile) {
@@ -167,6 +203,11 @@ class GardenCityGame {
       );
     }
     this.quality = new QualityManager(profile);
+    if (safeLiteMode) {
+      this.quality.prefs.selection = 'lite';
+      this.quality.activeTier = 'lite';
+      this.quality.renderScale = 0.7;
+    }
     const initialTierCfg = this.quality.getTierConfig();
 
     this.setLoadProgress(`Quality Tier: ${initialTierCfg.tier.toUpperCase()} — Initializing Rapier3D WASM physics...`, 38);
@@ -176,7 +217,7 @@ class GardenCityGame {
       this.renderer.capabilities.getMaxAnisotropy(),
       initialTierCfg.textureSizeCap
     );
-    this.env = new EnvironmentSystem(this.scene, this.renderer);
+    this.env = new EnvironmentSystem(this.scene, this.renderer, this.isMobileDevice || initialTierCfg.tier === 'lite');
     this.env.roadMaterials.push(this.textures.roadMajorMat, this.textures.roadMinorMat);
     this.env.windowMaterials.push(
       this.textures.buildings.commercial,
@@ -186,7 +227,7 @@ class GardenCityGame {
     );
     this.env.streetLightMaterials.push(this.textures.streetLampBulbMat);
 
-    this.post = new PostProcessingPipeline(this.renderer, this.scene, this.camera);
+    this.post = new PostProcessingPipeline(this.renderer, this.scene, this.camera, this.isMobileDevice);
     this.input = new InputManager(this.canvas);
     this.streamer = new ChunkStreamer(this.scene, this.textures, this.physics);
     this.streamer.setStreamRadius(initialTierCfg.chunkRadius);
@@ -1197,7 +1238,7 @@ class GardenCityGame {
 
   private loop = (now: number = performance.now()): void => {
     requestAnimationFrame(this.loop);
-    if (!this.webgl2Ready || !this.quality) return;
+    if (!this.webgl2Ready || this.contextLost || !this.quality) return;
 
     const gate = this.quality.shouldRenderFrame(now);
     if (!gate.render) return;
@@ -1593,5 +1634,6 @@ const game = new GardenCityGame();
 game.boot().catch((err) => {
   console.error('Boot error:', err);
   const txt = document.getElementById('loading-text');
-  if (txt) txt.textContent = `Error: ${err.message}`;
+  if (txt) txt.textContent = `Startup issue: ${err?.message || String(err)}`;
+  document.getElementById('boot-retry-actions')?.classList.remove('hidden');
 });

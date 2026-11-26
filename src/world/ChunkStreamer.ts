@@ -119,19 +119,22 @@ export class ChunkStreamer {
     if (!mRes.ok) throw new Error('Missing map-data/manifest.json — run OSM pipeline first');
     this.manifest = await mRes.json();
 
-    onProgress?.('Loading Namma Metro lines & highway corridors...', 42);
-    const [metroRes, corrRes] = await Promise.all([
-      fetch(`${base}map-data/metro.geojson`).catch(() => null),
-      fetch(`${base}map-data/corridors.geojson`).catch(() => null)
-    ]);
-
+    onProgress?.('Loading Namma Metro lines...', 42);
+    const metroRes = await fetch(`${base}map-data/metro.geojson`).catch(() => null);
     if (metroRes?.ok) {
       this.metroGeoJSON = await metroRes.json();
       this.buildMetroViaducts();
     }
-    if (corrRes?.ok) {
-      this.corridorGeoJSON = await corrRes.json();
-    }
+
+    // Defer 2MB highway corridors overlay to background so mobile devices boot immediately
+    fetch(`${base}map-data/corridors.geojson`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) this.corridorGeoJSON = data;
+      })
+      .catch(() => {
+        // Optional map overlay — non-fatal on slow mobile networks
+      });
   }
 
   private buildMetroViaducts(): void {
@@ -258,11 +261,17 @@ export class ChunkStreamer {
       }
     }
 
-    // Load closest chunks first
+    // Load closest chunks first in small batches (3 at a time) to avoid mobile RAM/network spikes
     toLoad.sort((a, b) => a.dist - b.dist);
-    await Promise.all(
-      toLoad.map((item) => this.loadChunk(item.cx, item.cz, item.key, item.dist <= 1.5 ? 'near' : 'far'))
-    );
+    const batchSize = 3;
+    for (let i = 0; i < toLoad.length; i += batchSize) {
+      const slice = toLoad.slice(i, i + batchSize);
+      await Promise.all(
+        slice.map((item) =>
+          this.loadChunk(item.cx, item.cz, item.key, item.dist <= 1.5 ? 'near' : 'far').catch(() => {})
+        )
+      );
+    }
   }
 
   private unloadChunk(key: string, chunk: LoadedChunk): void {

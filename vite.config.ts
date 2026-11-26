@@ -7,7 +7,7 @@ export default defineConfig({
     strictPort: false
   },
   build: {
-    target: 'es2022',
+    target: 'es2020',
     chunkSizeWarningLimit: 1800,
     rollupOptions: {
       output: {

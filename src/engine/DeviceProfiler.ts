@@ -30,7 +30,7 @@ const PROFILE_STORAGE_KEY = 'garden_city_hw_profile_v1';
  * Checks whether WebGL2 is available before booting Three.js.
  * Also probes optional WebGPU presence (kept strictly optional with WebGL2 fallback).
  */
-export function checkGraphicsSupport(): {
+export function checkGraphicsSupport(existingGl?: WebGLRenderingContext | WebGL2RenderingContext | null): {
   webgl2Supported: boolean;
   webgpuAvailable: boolean;
   gpuVendor: string;
@@ -40,21 +40,38 @@ export function checkGraphicsSupport(): {
   let gpuVendor = 'Unknown';
   let gpuRenderer = 'Unknown GPU';
 
-  if (typeof document !== 'undefined') {
+  const readGlInfo = (gl: WebGLRenderingContext | WebGL2RenderingContext) => {
+    try {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      if (dbg) {
+        gpuVendor = String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || gpuVendor);
+        gpuRenderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || gpuRenderer);
+      } else {
+        gpuVendor = String(gl.getParameter(gl.VENDOR) || gpuVendor);
+        gpuRenderer = String(gl.getParameter(gl.RENDERER) || gpuRenderer);
+      }
+    } catch {
+      // ignore restricted driver parameter read
+    }
+  };
+
+  if (existingGl) {
+    webgl2Supported = true;
+    readGlInfo(existingGl);
+  } else if (typeof document !== 'undefined') {
     try {
       const probeCanvas = document.createElement('canvas');
-      const gl = probeCanvas.getContext('webgl2', { powerPreference: 'high-performance' }) as WebGL2RenderingContext | null;
+      let gl = probeCanvas.getContext('webgl2', {
+        powerPreference: 'high-performance',
+        failIfMajorPerformanceCaveat: false
+      }) as WebGL2RenderingContext | null;
+      // Retry with default attributes (some Android OEM drivers reject high-performance hint)
+      if (!gl) {
+        gl = probeCanvas.getContext('webgl2') as WebGL2RenderingContext | null;
+      }
       if (gl) {
         webgl2Supported = true;
-        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-        if (dbg) {
-          gpuVendor = String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || gpuVendor);
-          gpuRenderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || gpuRenderer);
-        } else {
-          gpuVendor = String(gl.getParameter(gl.VENDOR) || gpuVendor);
-          gpuRenderer = String(gl.getParameter(gl.RENDERER) || gpuRenderer);
-        }
-        // Release temporary probe context cleanly
+        readGlInfo(gl);
         gl.getExtension('WEBGL_lose_context')?.loseContext();
       }
     } catch {
@@ -192,7 +209,8 @@ export async function runHardwareBenchmark(
   onProgress?: (msg: string, pct: number) => void,
   durationMs = 5000
 ): Promise<HardwareProfile> {
-  const support = checkGraphicsSupport();
+  // Reuse active renderer WebGL context so Android never hits WebGL context-pool limits
+  const support = checkGraphicsSupport(renderer.getContext());
   const { platform, isMobile, isMacRetina } = detectPlatform();
   const deviceMemoryGB = typeof navigator !== 'undefined' && typeof (navigator as unknown as { deviceMemory?: number }).deviceMemory === 'number'
     ? (navigator as unknown as { deviceMemory: number }).deviceMemory
@@ -202,9 +220,14 @@ export async function runHardwareBenchmark(
   const screenHeight = typeof window !== 'undefined' ? window.screen?.height || window.innerHeight : 720;
   const devicePixelRatio = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
-  // Allow instant skip via URL flag (?skipBench=1) for fast CI smoke runs while keeping real 5s default!
+  // On mobile phones, use a lightweight 1.5s benchmark (or instant on ?safeLite=1 / ?skipBench=1)
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const actualDuration = urlParams?.get('skipBench') === '1' ? 450 : durationMs;
+  const skipRequested = urlParams?.get('skipBench') === '1' || urlParams?.get('safeLite') === '1';
+  const actualDuration = skipRequested ? 300 : isMobile ? Math.min(durationMs, 1500) : durationMs;
+
+  // Keep benchmark at 1x DPR so 3x DPR phones never allocate huge offscreen buffers before tier selection
+  const prevDpr = renderer.getPixelRatio();
+  renderer.setPixelRatio(1);
 
   // Build self-contained miniature Bengaluru block benchmark scene
   const benchScene = new THREE.Scene();
@@ -214,20 +237,24 @@ export async function runHardwareBenchmark(
 
   const dirLight = new THREE.DirectionalLight(0xffd7a1, 2.2);
   dirLight.position.set(22, 36, 18);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.set(1024, 1024);
+  dirLight.castShadow = !isMobile;
+  if (!isMobile) {
+    dirLight.shadow.mapSize.set(1024, 1024);
+  }
   benchScene.add(dirLight, new THREE.AmbientLight(0x3a4a6b, 0.8));
 
   const boxGeo = new THREE.BoxGeometry(1.8, 1.0, 1.8);
   const bldMat = new THREE.MeshStandardMaterial({ color: 0x4b6584, roughness: 0.35, metalness: 0.45 });
-  const count = 420;
+  const count = isMobile ? 169 : 420;
+  const gridSide = isMobile ? 13 : 21;
+  const halfSide = Math.floor(gridSide / 2);
   const inst = new THREE.InstancedMesh(boxGeo, bldMat, count);
-  inst.castShadow = true;
-  inst.receiveShadow = true;
+  inst.castShadow = !isMobile;
+  inst.receiveShadow = !isMobile;
   const dummy = new THREE.Object3D();
   for (let i = 0; i < count; i++) {
-    const gx = (i % 21) - 10;
-    const gz = Math.floor(i / 21) - 10;
+    const gx = (i % gridSide) - halfSide;
+    const gz = Math.floor(i / gridSide) - halfSide;
     const h = 2 + ((i * 19) % 14);
     dummy.position.set(gx * 3.1, h * 0.5, gz * 3.1);
     dummy.scale.set(1, h, 1);
@@ -241,7 +268,7 @@ export async function runHardwareBenchmark(
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x1e2430, roughness: 0.28, metalness: 0.35 });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
+  ground.receiveShadow = !isMobile;
   benchScene.add(ground);
 
   const frameTimes: number[] = [];
@@ -249,31 +276,50 @@ export async function runHardwareBenchmark(
   let last = start;
 
   await new Promise<void>((resolve) => {
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      resolve();
+    };
+    // Hard wall-clock ceiling so throttled/backgrounded mobile browsers can NEVER stall startup
+    const hardTimer = window.setTimeout(done, actualDuration + 1200);
+
     const tick = (now: number) => {
+      if (finished) return;
       const elapsed = now - start;
       const dtMs = now - last;
       last = now;
-      if (elapsed > 250 && dtMs > 1 && dtMs < 250) {
+      if (elapsed > 200 && dtMs > 1 && dtMs < 250) {
         frameTimes.push(dtMs);
       }
 
       const angle = elapsed * 0.0009;
       benchCam.position.set(Math.cos(angle) * 34, 15 + Math.sin(angle * 2) * 3, Math.sin(angle) * 34);
       benchCam.lookAt(0, 4, 0);
-      renderer.render(benchScene, benchCam);
+      try {
+        renderer.render(benchScene, benchCam);
+      } catch {
+        window.clearTimeout(hardTimer);
+        done();
+        return;
+      }
 
       const pct = Math.min(1, elapsed / actualDuration);
       const secLeft = Math.max(0, (actualDuration - elapsed) / 1000).toFixed(1);
       onProgress?.(`Benchmarking device GPU & refresh rate (${secLeft}s)...`, 12 + Math.round(pct * 24));
 
       if (elapsed >= actualDuration) {
-        resolve();
+        window.clearTimeout(hardTimer);
+        done();
       } else {
         requestAnimationFrame(tick);
       }
     };
     requestAnimationFrame(tick);
   });
+
+  renderer.setPixelRatio(prevDpr);
 
   // Dispose benchmark GPU resources completely!
   boxGeo.dispose();

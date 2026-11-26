@@ -25,6 +25,27 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+Kannada:wght@400;600;700&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      window.__GCU_SHOW_BOOT_ERR__ = function (msg) {
+        var txt = document.getElementById('loading-text');
+        var retry = document.getElementById('boot-retry-actions');
+        if (txt) txt.textContent = 'Startup issue: ' + msg;
+        if (retry) retry.classList.remove('hidden');
+      };
+      window.addEventListener('error', function (e) {
+        var ts = document.getElementById('title-screen');
+        if (ts && ts.className.indexOf('hidden') === -1) {
+          window.__GCU_SHOW_BOOT_ERR__((e && e.message) || 'Script failed to load');
+        }
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var ts = document.getElementById('title-screen');
+        if (ts && ts.className.indexOf('hidden') === -1) {
+          var reason = e && e.reason;
+          window.__GCU_SHOW_BOOT_ERR__((reason && reason.message) || String(reason || 'Load interrupted'));
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="game-root">
@@ -62,7 +83,11 @@
           </p>
           <div id="loading-status" class="loading-box">
             <div class="loading-bar-track"><div id="loading-bar-fill"></div></div>
-            <div id="loading-text">Initializing WebGL2 & Rapier Physics...</div>
+            <div id="loading-text">Initializing WebGL2 &amp; Rapier Physics...</div>
+            <div id="boot-retry-actions" class="boot-retry-actions hidden">
+              <button onclick="window.location.href='./?safeLite=1'" class="btn-primary">OPEN IN SAFE MOBILE LITE MODE</button>
+              <button onclick="window.location.reload()" class="btn-secondary">RETRY</button>
+            </div>
           </div>
           <div id="title-actions" class="title-actions hidden">
             <button id="btn-play" class="btn-primary">ENTER BENGALURU</button>
