@@ -2,13 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Garden City Underworld — Bengaluru</title>
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B0F1A'/%3E%3Cpath d='M14 48V24l10-8 8 6 10-10 8 8v28H14z' fill='%2300E5C3' opacity='0.85'/%3E%3Ccircle cx='44' cy='18' r='6' fill='%23FF2E88'/%3E%3Crect x='14' y='46' width='36' height='4' fill='%23FFB020'/%3E%3C/svg%3E"
-    />
+    <meta name="application-name" content="Garden City Underworld" />
+    <meta name="description" content="3D open-world action game set in Bengaluru — playable & installable on Android, iOS, macOS, and Windows." />
+    <meta name="theme-color" content="#0B0F1A" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Garden City" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./icons/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="./icons/apple-touch-icon-167.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="./icons/apple-touch-icon-152.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="./icons/apple-touch-icon-120.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -41,7 +51,10 @@
       <div id="title-screen" class="overlay-screen">
         <div class="title-backdrop"></div>
         <div class="title-content">
-          <div class="title-kicker">ಬೆಂಗಳೂರು ಭೂಗತ ಲೋಕ • BENGALURU OPEN WORLD</div>
+          <div class="title-brand-row">
+            <img src="./icons/icon-192.png" alt="Garden City Underworld App Icon" class="title-app-emblem" />
+            <div class="title-kicker">ಬೆಂಗಳೂರು ಭೂಗತ ಲೋಕ • BENGALURU OPEN WORLD</div>
+          </div>
           <h1 class="game-title">GARDEN CITY<br /><span>UNDERWORLD</span></h1>
           <p class="title-subtitle">
             Rise from the monsoon alleys of Old Bengaluru to rule the Silicon Plateau.
@@ -53,6 +66,7 @@
           </div>
           <div id="title-actions" class="title-actions hidden">
             <button id="btn-play" class="btn-primary">ENTER BENGALURU</button>
+            <button id="btn-install-app" data-install-app-btn class="btn-install">⬇ INSTALL APP</button>
             <button id="btn-title-vault" class="btn-secondary">CHARACTERS &amp; VAULT</button>
             <button id="btn-credits" class="btn-secondary">CREDITS &amp; OSM DATA</button>
           </div>
@@ -369,10 +383,19 @@
                 <option value="auto">Auto Optical Scope on Right-Click (RMB)</option>
               </select>
             </label>
+            <label>
+              On-Screen Touch Controls
+              <select id="set-touch-controls">
+                <option value="auto" selected>Auto (Phones &amp; Tablets)</option>
+                <option value="on">Always On</option>
+                <option value="off">Off (Keyboard / Gamepad)</option>
+              </select>
+            </label>
           </div>
           <div id="settings-device-info" class="device-info-box"></div>
           <div class="pause-actions">
             <button id="btn-resume" class="btn-primary">RESUME GAME</button>
+            <button id="btn-pause-install-app" data-install-app-btn class="btn-install">⬇ INSTALL APP</button>
             <button id="btn-rerun-bench" class="btn-secondary">RE-RUN 5s BENCHMARK</button>
             <button id="btn-pause-vault" class="btn-secondary">CHARACTERS &amp; VAULT [K]</button>
             <button id="btn-open-credits-pause" class="btn-secondary">CREDITS &amp; MIN SPECS</button>

@@ -1856,3 +1856,360 @@ html, body, #game-root {
   color: #fde68a;
   font-size: 11.5px;
 }
+
+/* ================= CROSS-PLATFORM APP (PWA, iOS, ANDROID, MACOS, WINDOWS) & TOUCH CONTROLS ================= */
+html, body, #game-root, #game-canvas {
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#game-canvas {
+  touch-action: none;
+}
+
+.title-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.title-app-emblem {
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 2px solid rgba(255, 176, 32, 0.72);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65), 0 0 20px rgba(0, 229, 195, 0.28);
+  flex-shrink: 0;
+}
+
+.btn-install {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  padding: 13px 22px;
+  border-radius: 10px;
+  border: 1px solid #00E5C3;
+  background: linear-gradient(135deg, rgba(0, 229, 195, 0.24), rgba(255, 46, 136, 0.22));
+  color: #f8fafc;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, background 0.15s;
+}
+
+.btn-install:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(0, 229, 195, 0.38);
+  background: linear-gradient(135deg, rgba(0, 229, 195, 0.36), rgba(255, 46, 136, 0.34));
+}
+
+.btn-install.app-installed {
+  border-color: rgba(0, 229, 195, 0.45);
+  background: rgba(0, 229, 195, 0.12);
+  color: #00E5C3;
+  cursor: default;
+}
+
+.install-modal-card {
+  width: 780px;
+  max-width: 94vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: rgba(11, 15, 26, 0.98);
+  border: 1px solid rgba(0, 229, 195, 0.45);
+  border-top: 3px solid #FF2E88;
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.85);
+}
+
+.install-card-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.install-app-icon {
+  width: 74px;
+  height: 74px;
+  border-radius: 18px;
+  border: 2px solid #FFB020;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+  flex-shrink: 0;
+}
+
+.install-kicker {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #00E5C3;
+}
+
+.install-card-head h2 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 26px;
+  color: #FFB020;
+  margin: 2px 0;
+}
+
+.install-sub {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.install-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.install-step-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 13px 15px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #cbd5e1;
+}
+
+.install-step-card.active {
+  border-color: #00E5C3;
+  background: rgba(0, 229, 195, 0.1);
+  box-shadow: 0 0 18px rgba(0, 229, 195, 0.16);
+}
+
+.install-plat-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFB020;
+  margin-bottom: 6px;
+}
+
+.install-step-card ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.install-step-card li {
+  margin-bottom: 4px;
+}
+
+.install-tip {
+  background: rgba(255, 46, 136, 0.14);
+  border: 1px solid rgba(255, 46, 136, 0.45);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: #fce7f3;
+  margin-bottom: 12px;
+}
+
+.install-card-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Mobile & Tablet On-Screen Touch Controls */
+.touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 36;
+  pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.touch-look-zone {
+  position: absolute;
+  top: 72px;
+  right: 0;
+  width: 56%;
+  bottom: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-top-bar {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+  z-index: 38;
+}
+
+.touch-pill-btn {
+  padding: 8px 13px;
+  border-radius: 99px;
+  border: 1px solid rgba(0, 229, 195, 0.45);
+  background: rgba(11, 15, 26, 0.78);
+  color: #f8fafc;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  backdrop-filter: blur(6px);
+  touch-action: manipulation;
+}
+
+.touch-pill-btn.pressed {
+  background: rgba(0, 229, 195, 0.32);
+  border-color: #00E5C3;
+}
+
+.touch-stick-base {
+  position: absolute;
+  left: max(22px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 229, 195, 0.45);
+  background: rgba(11, 15, 26, 0.52);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #00E5C3, #0b4f4a);
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 4px 16px rgba(0, 229, 195, 0.45);
+}
+
+.touch-action-pad {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 210px;
+  height: 186px;
+  pointer-events: none;
+  z-index: 38;
+}
+
+.touch-btn {
+  position: absolute;
+  pointer-events: auto;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  background: rgba(11, 15, 26, 0.74);
+  color: #f8fafc;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  backdrop-filter: blur(5px);
+  touch-action: none;
+}
+
+.touch-btn.pressed {
+  transform: scale(0.92);
+  border-color: #FFB020;
+}
+
+.touch-btn-fire {
+  right: 4px;
+  bottom: 12px;
+  width: 74px;
+  height: 74px;
+  font-size: 16px;
+  border-color: #FF2E88;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 46, 136, 0.85), rgba(130, 14, 65, 0.85));
+  box-shadow: 0 0 22px rgba(255, 46, 136, 0.45);
+}
+
+.touch-btn-aim {
+  right: 88px;
+  bottom: 8px;
+  width: 54px;
+  height: 54px;
+  border-color: #00E5C3;
+}
+
+.touch-btn-jump {
+  right: 12px;
+  bottom: 98px;
+  width: 56px;
+  height: 56px;
+}
+
+.touch-btn-use {
+  right: 80px;
+  bottom: 76px;
+  width: 58px;
+  height: 58px;
+  border-color: #FFB020;
+}
+
+.touch-btn-use.highlight {
+  background: rgba(255, 176, 32, 0.85);
+  color: #0B0F1A;
+  box-shadow: 0 0 18px rgba(255, 176, 32, 0.7);
+}
+
+.touch-btn-reload {
+  right: 146px;
+  bottom: 58px;
+  width: 48px;
+  height: 48px;
+  font-size: 11px;
+}
+
+.touch-btn-holster {
+  right: 146px;
+  bottom: 116px;
+  width: 48px;
+  height: 48px;
+  font-size: 11px;
+}
+
+body.touch-active .controls-strip {
+  display: none !important;
+}
+
+/* Mobile & Tablet Responsive Layout + Safe Area Insets */
+@media (max-width: 900px) {
+  .hud-top-left {
+    top: max(10px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    transform: scale(0.76);
+    transform-origin: top left;
+  }
+  .hud-top-right {
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    transform: scale(0.8);
+    transform-origin: top right;
+  }
+  .mission-tracker {
+    display: none;
+  }
+  .hud-bottom-center {
+    bottom: 162px;
+  }
+  .install-platform-grid, .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .title-content {
+    padding: 18px;
+  }
+  .game-title {
+    font-size: clamp(36px, 11vw, 56px);
+  }
+}

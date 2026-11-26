@@ -1,6 +1,8 @@
 # Garden City Underworld
 
-**Play Live:** [GitHub Pages](https://naveenk8288.github.io/garden-city/) • [Vercel](https://garden-city-underworld.vercel.app/)
+**Play Live / Install as App:** [Vercel](https://garden-city-underworld.vercel.app/) • [GitHub Pages](https://naveenk8288.github.io/garden-city/)
+
+> **Install on Any Device:** Open either link and click **⬇ INSTALL APP** on the title screen (or use **Share → Add to Home Screen** on iPhone/iPad, **File → Add to Dock** on macOS Safari, or the browser address-bar **Install** button on Android Chrome, Windows, and MacBooks). Includes offline Service Worker caching, adaptive icons, and automatic mobile touch controls.
 
 A 3D open-world gangster action game set in a monsoon-lit recreation of **Bengaluru (Bangalore), India**, built with **Vite + Three.js (WebGL2) + Rapier3D (WASM)** and real **OpenStreetMap** geometry streamed in chunked GeoJSON tiles.
 

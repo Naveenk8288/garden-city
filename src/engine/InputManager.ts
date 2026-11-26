@@ -1,3 +1,5 @@
+import type { TouchInputState } from '../ui/TouchControlsUI';
+
 export interface InputState {
   moveX: number;
   moveZ: number;
@@ -149,7 +151,7 @@ export class InputManager {
     }
   }
 
-  public poll(dt: number): InputState {
+  public poll(dt: number, touch?: TouchInputState): InputState {
     let moveX = 0;
     let moveZ = 0;
     if (!this.uiBlocked) {
@@ -157,10 +159,14 @@ export class InputManager {
       if (this.keys.has('KeyD') || this.charKeys.has('d') || this.keys.has('ArrowRight')) moveX += 1;
       if (this.keys.has('KeyW') || this.charKeys.has('w') || this.keys.has('ArrowUp')) moveZ += 1;
       if (this.keys.has('KeyS') || this.charKeys.has('s') || this.keys.has('ArrowDown')) moveZ -= 1;
+      if (touch && (Math.abs(touch.moveX) > 0.01 || Math.abs(touch.moveZ) > 0.01)) {
+        moveX = touch.moveX;
+        moveZ = touch.moveZ;
+      }
     }
 
-    let lookDeltaX = this.mouseDX * 0.0022 * this.sensitivity;
-    let lookDeltaY = this.mouseDY * 0.0022 * this.sensitivity;
+    let lookDeltaX = this.mouseDX * 0.0022 * this.sensitivity + (touch && !this.uiBlocked ? touch.lookDeltaX * this.sensitivity : 0);
+    let lookDeltaY = this.mouseDY * 0.0022 * this.sensitivity + (touch && !this.uiBlocked ? touch.lookDeltaY * this.sensitivity : 0);
     this.mouseDX = 0;
     this.mouseDY = 0;
 
@@ -208,29 +214,29 @@ export class InputManager {
     const state: InputState = {
       moveX,
       moveZ,
-      sprint: !this.uiBlocked && (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || gpSprint),
+      sprint: !this.uiBlocked && (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || gpSprint || Boolean(touch?.sprint)),
       crouch: !this.uiBlocked && (this.keys.has('KeyC') || gpCrouch),
       crouchJustPressed: !this.uiBlocked && this.justPressed.has('KeyC'),
-      jumpPressed: !this.uiBlocked && (this.justPressed.has('Space') || gpJump),
+      jumpPressed: !this.uiBlocked && (this.justPressed.has('Space') || gpJump || Boolean(touch?.jumpPressed)),
       rollPressed: !this.uiBlocked && (this.justPressed.has('AltLeft') || this.justPressed.has('ControlLeft') || this.doubleTapCrouch),
       grabPressed: !this.uiBlocked && this.justPressed.has('KeyG'),
-      interactPressed: !this.uiBlocked && (this.justPressed.has(this.interactKey) || gpInteract),
-      reloadPressed: !this.uiBlocked && this.justPressed.has('KeyR'),
-      aim: !this.uiBlocked && (this.mouseButtons.has(2) || gpAim),
-      fire: !this.uiBlocked && (this.mouseButtons.has(0) || gpFire),
-      fireJustPressed: !this.uiBlocked && this.mouseJustPressed.has(0),
-      meleeBlock: !this.uiBlocked && this.mouseButtons.has(2),
-      handbrake: !this.uiBlocked && this.keys.has('Space'),
+      interactPressed: !this.uiBlocked && (this.justPressed.has(this.interactKey) || gpInteract || Boolean(touch?.interactPressed)),
+      reloadPressed: !this.uiBlocked && (this.justPressed.has('KeyR') || Boolean(touch?.reloadPressed)),
+      aim: !this.uiBlocked && (this.mouseButtons.has(2) || gpAim || Boolean(touch?.aim)),
+      fire: !this.uiBlocked && (this.mouseButtons.has(0) || gpFire || Boolean(touch?.fire)),
+      fireJustPressed: !this.uiBlocked && (this.mouseJustPressed.has(0) || Boolean(touch?.fireJustPressed)),
+      meleeBlock: !this.uiBlocked && (this.mouseButtons.has(2) || Boolean(touch?.aim)),
+      handbrake: !this.uiBlocked && (this.keys.has('Space') || Boolean(touch?.handbrake)),
       horn: !this.uiBlocked && this.keys.has('KeyH'),
       radioNextPressed: !this.uiBlocked && this.justPressed.has('KeyX'),
-      weaponWheel: this.keys.has('KeyQ'),
-      mapTogglePressed: this.justPressed.has('Tab'),
-      metroTogglePressed: this.justPressed.has('KeyM'),
-      pauseTogglePressed: this.justPressed.has('Escape'),
+      weaponWheel: this.keys.has('KeyQ') || Boolean(touch?.weaponWheel),
+      mapTogglePressed: this.justPressed.has('Tab') || Boolean(touch?.mapTogglePressed),
+      metroTogglePressed: this.justPressed.has('KeyM') || Boolean(touch?.metroTogglePressed),
+      pauseTogglePressed: this.justPressed.has('Escape') || Boolean(touch?.pauseTogglePressed),
       cameraFlipPressed: !this.uiBlocked && this.justPressed.has('KeyV'),
       wardrobeTogglePressed: this.justPressed.has('KeyK'),
       storyTogglePressed: this.justPressed.has('KeyJ'),
-      holsterTogglePressed: !this.uiBlocked && this.justPressed.has('KeyU'),
+      holsterTogglePressed: !this.uiBlocked && (this.justPressed.has('KeyU') || Boolean(touch?.holsterTogglePressed)),
       scopeTogglePressed: !this.uiBlocked && (this.justPressed.has('KeyZ') || this.mouseJustPressed.has(1)),
       wheelDelta: this.wheelDelta,
       weaponSlotPressed,

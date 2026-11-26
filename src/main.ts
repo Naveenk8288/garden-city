@@ -32,6 +32,8 @@ import { DialogueSystem } from './story/DialogueSystem';
 import { CutsceneManager } from './story/CutsceneManager';
 import { CampaignManager } from './story/CampaignManager';
 import { DebugPanel } from './ui/DebugPanel';
+import { AppInstallManager } from './ui/AppInstallManager';
+import { TouchControlsUI, TouchModePref } from './ui/TouchControlsUI';
 import {
   CharacterLoadout,
   loadCharacterLoadout,
@@ -80,6 +82,8 @@ class GardenCityGame {
   private cutscenes!: CutsceneManager;
   private campaign!: CampaignManager;
   private debugPanel!: DebugPanel;
+  private appInstall = new AppInstallManager();
+  private touchControls = new TouchControlsUI();
   private characterLoadout: CharacterLoadout = loadCharacterLoadout();
   private lastFps = 60;
 
@@ -830,7 +834,8 @@ class GardenCityGame {
       this.dialogue.isOpen ||
       this.campaign.isJournalOpen ||
       this.cutscenes.isPlaying ||
-      this.debugPanel.isOpen;
+      this.debugPanel.isOpen ||
+      this.appInstall.isModalOpen;
     this.input.uiBlocked = anyModal;
     if (anyModal) {
       this.input.releasePointerLock();
@@ -946,6 +951,18 @@ class GardenCityGame {
 
     (document.getElementById('set-interact-key') as HTMLSelectElement)?.addEventListener('change', (e) => {
       this.input.interactKey = (e.target as HTMLSelectElement).value;
+    });
+
+    document.querySelectorAll('[data-install-app-btn]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        void this.appInstall.triggerInstall();
+      });
+    });
+    this.appInstall.onModalToggle = () => this.syncUIBlockState();
+    this.appInstall.onNotify = (msg) => this.shopMetroUI.showToast(msg, 4.0);
+
+    (document.getElementById('set-touch-controls') as HTMLSelectElement)?.addEventListener('change', (e) => {
+      this.touchControls.setMode((e.target as HTMLSelectElement).value as TouchModePref);
     });
 
     (document.getElementById('set-scope-mode') as HTMLSelectElement)?.addEventListener('change', (e) => {
@@ -1186,11 +1203,14 @@ class GardenCityGame {
     if (!gate.render) return;
 
     const dt = Math.min(gate.frameDt, 0.05);
-    const input = this.input.poll(dt);
+    const touchSnap = this.touchControls.consumeSnapshot();
+    const input = this.input.poll(dt, touchSnap);
 
     if (this.started) {
       if (input.pauseTogglePressed) {
-        if (this.cutscenes.isPlaying) {
+        if (this.appInstall.isModalOpen) {
+          this.appInstall.setModalOpen(false);
+        } else if (this.cutscenes.isPlaying) {
           this.cutscenes.skip();
         } else if (this.dialogue.isOpen) {
           this.dialogue.close();
@@ -1244,10 +1264,11 @@ class GardenCityGame {
         }
       }
 
-      // Weapon Wheel (Hold Q)
+      // Weapon Wheel (Hold Q or Tap GUNS on Touch)
       if (!this.paused && !this.wardrobeUI.isOpen && !this.cityMapUI.isOpen && !this.shopMetroUI.metroOpen && !this.shopMetroUI.shopOpen && !this.player.inVehicle) {
         this.weaponUI.setOpen(input.weaponWheel, this.weapons, (id) => {
           this.weapons.equip(id);
+          this.touchControls.closeWeaponWheel();
           this.weaponUI.setOpen(false, this.weapons, () => {});
           this.syncUIBlockState();
         });
@@ -1547,14 +1568,18 @@ class GardenCityGame {
       );
 
       this.updateHUD(dt, promptText);
+      this.touchControls.syncVisibility(true, promptText);
       this.debugPanel.update(dt);
     } else if (!this.started) {
+      this.touchControls.syncVisibility(false);
       // Cinematic dusk orbit over MG Road / Cubbon Park / Vidhana Soudha on Title Screen
       const t = performance.now() * 0.00018;
       const base = latLonToWorld(12.9765, 77.6005);
       this.camera.position.set(base.x + Math.cos(t) * 145, 58, base.z + Math.sin(t) * 145);
       this.camera.lookAt(base.x, 12, base.z);
       this.env.update(dt, this.camera.position, 0);
+    } else {
+      this.touchControls.syncVisibility(false);
     }
 
     this.post.render();
