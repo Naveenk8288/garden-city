@@ -172,6 +172,106 @@ export class AudioEngine {
     osc.stop(t + 0.065);
   }
 
+  public playVehicleCrash(
+    intensity: number,
+    kind: 'vehicle' | 'building' | 'person' = 'vehicle',
+    distance = 0
+  ): void {
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') void this.ctx.resume();
+
+    const power = Math.max(0.18, Math.min(1, intensity));
+    const atten = Math.max(0.06, 1 - distance / 85);
+    const gainScale = power * atten;
+    const t = this.ctx.currentTime;
+
+    // 1. Heavy low-end chassis thump / bumper impact
+    const thud = this.ctx.createOscillator();
+    thud.type = kind === 'person' ? 'sine' : 'triangle';
+    thud.frequency.setValueAtTime(kind === 'person' ? 115 : 135 + power * 45, t);
+    thud.frequency.exponentialRampToValueAtTime(28, t + 0.14 + power * 0.12);
+    const thudGain = this.ctx.createGain();
+    thudGain.gain.setValueAtTime((kind === 'person' ? 0.34 : 0.46) * gainScale, t);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.16 + power * 0.14);
+    thud.connect(thudGain);
+    thudGain.connect(this.masterGain);
+    thud.start(t);
+    thud.stop(t + 0.32);
+
+    // 2. Metal crunch & bumper scrape (filtered noisy impact burst)
+    const crunchDur = kind === 'person' ? 0.12 : 0.2 + power * 0.28;
+    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * crunchDur), this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const env = Math.exp(-i / (data.length * (0.24 + power * 0.18)));
+      // Add jagged crunch spikes for sheet-metal crumple texture
+      const grit = Math.sin(i * 0.19) * 0.35 + (Math.random() * 2 - 1);
+      data[i] = Math.max(-1, Math.min(1, grit * 0.85)) * env;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buf;
+
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(kind === 'building' ? 1200 : kind === 'person' ? 520 : 1650, t);
+    filt.frequency.exponentialRampToValueAtTime(220, t + crunchDur);
+    filt.Q.value = kind === 'vehicle' ? 1.15 : 0.85;
+
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime((kind === 'person' ? 0.22 : 0.44) * gainScale, t);
+    nGain.gain.exponentialRampToValueAtTime(0.001, t + crunchDur);
+    noise.connect(filt);
+    filt.connect(nGain);
+    nGain.connect(this.masterGain);
+    noise.start(t);
+
+    // 3. Metallic fender clang partials (especially audible on vehicle-to-vehicle touch)
+    if (kind !== 'person') {
+      const partials = kind === 'vehicle'
+        ? [[410, 0.16], [685, 0.12], [1180, 0.08]]
+        : [[280, 0.14], [510, 0.09]];
+      for (const [hz, amp] of partials) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sawtooth';
+        const jitter = 0.94 + Math.random() * 0.12;
+        osc.frequency.setValueAtTime(hz * jitter, t);
+        osc.frequency.exponentialRampToValueAtTime(hz * 0.72 * jitter, t + 0.16 + power * 0.14);
+
+        const pFilt = this.ctx.createBiquadFilter();
+        pFilt.type = 'bandpass';
+        pFilt.frequency.value = hz * 1.1;
+        pFilt.Q.value = 3.2;
+
+        const pg = this.ctx.createGain();
+        pg.gain.setValueAtTime(amp * gainScale, t);
+        pg.gain.exponentialRampToValueAtTime(0.0008, t + 0.16 + power * 0.16);
+        osc.connect(pFilt);
+        pFilt.connect(pg);
+        pg.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.34);
+      }
+    }
+
+    // 4. Headlight / windshield glass crackle on medium-to-heavy crashes
+    if (kind !== 'person' && power >= 0.42) {
+      const shards = power > 0.75 ? 5 : 3;
+      for (let i = 0; i < shards; i++) {
+        const off = 0.025 + i * 0.032 + Math.random() * 0.02;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(2800 + Math.random() * 2800, t + off);
+        const sg = this.ctx.createGain();
+        sg.gain.setValueAtTime(0.065 * gainScale, t + off);
+        sg.gain.exponentialRampToValueAtTime(0.0005, t + off + 0.075);
+        osc.connect(sg);
+        sg.connect(this.masterGain);
+        osc.start(t + off);
+        osc.stop(t + off + 0.08);
+      }
+    }
+  }
+
   public playHorn(kind: string, distance = 0): void {
     if (!this.ctx) return;
     const atten = Math.max(0.03, 1 - distance / 80);

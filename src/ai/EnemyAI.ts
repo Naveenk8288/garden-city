@@ -209,16 +209,19 @@ export class EnemyAIManager {
     return out;
   }
 
-  public checkVehicleRamming(vehPos: THREE.Vector3, vehSpeed: number, fwdDir: THREE.Vector3): void {
-    if (Math.abs(vehSpeed) < 5.5) return;
+  public checkVehicleRamming(vehPos: THREE.Vector3, vehSpeed: number, fwdDir: THREE.Vector3): THREE.Vector3[] {
+    const hitPoints: THREE.Vector3[] = [];
+    if (Math.abs(vehSpeed) < 2.2) return hitPoints;
     for (const u of this.units) {
       if (u.state === 'knockout') continue;
       const d = Math.hypot(u.position.x - vehPos.x, u.position.z - vehPos.z);
-      if (d < 2.2) {
-        const dmg = Math.abs(vehSpeed) * 4.5;
-        this.damageUnit(u, dmg, fwdDir, Math.min(20, Math.abs(vehSpeed)), false);
+      if (d < 2.35) {
+        const dmg = Math.max(12, Math.abs(vehSpeed) * 4.8);
+        this.damageUnit(u, dmg, fwdDir, Math.min(20, Math.max(5, Math.abs(vehSpeed))), false);
+        hitPoints.push(u.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
       }
     }
+    return hitPoints;
   }
 
   public damageUnit(

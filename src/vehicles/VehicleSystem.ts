@@ -22,6 +22,16 @@ export const RADIO_STATIONS: RadioStation[] = [
   { name: 'RADIO OFF', genre: 'Engine & City Ambience', bpm: 0, rootHz: 0 }
 ];
 
+export interface VehicleCrashEvent {
+  intensity: number;
+  kind: 'vehicle' | 'building' | 'person';
+  point: THREE.Vector3;
+  normal: THREE.Vector3;
+  damage: number;
+  distance: number;
+  involvesPlayer: boolean;
+}
+
 export interface VehicleInstance {
   id: string;
   kind: VehicleKind;
@@ -39,6 +49,9 @@ export interface VehicleInstance {
   health: number;
   maxHealth: number;
   halfLength: number;
+  halfWidth: number;
+  mass: number;
+  crashCooldown: number;
   isPlayerControlled: boolean;
   isTraffic: boolean;
   roadSeg: RoadSegmentData | null;
@@ -94,7 +107,9 @@ export class VehicleSystem {
 
   public onHonk?: (kind: VehicleKind, distance: number) => void;
   public onVehicleStolen?: () => void;
-  public onCrash?: (intensity: number) => void;
+  public onCrash?: (event: VehicleCrashEvent) => void;
+  public onPlayerBumpedOnFoot?: (damage: number, pushDir: THREE.Vector3, intensity: number) => void;
+  private footBumpCooldown = 0;
 
   constructor(scene: THREE.Scene, streamer: ChunkStreamer, physics: PhysicsWorld) {
     this.scene = scene;
@@ -119,6 +134,9 @@ export class VehicleSystem {
     built.group.rotation.y = yaw;
     this.scene.add(built.group);
 
+    const halfWidth = kind === 'bike' ? 0.45 : kind === 'auto' ? 0.8 : kind === 'bus' || kind === 'truck' ? 1.32 : 1.0;
+    const mass = kind === 'bike' ? 0.45 : kind === 'auto' ? 0.85 : kind === 'bus' || kind === 'truck' ? 3.2 : 1.4;
+
     const veh: VehicleInstance = {
       id,
       kind,
@@ -136,6 +154,9 @@ export class VehicleSystem {
       health: built.maxHealth,
       maxHealth: built.maxHealth,
       halfLength: built.halfLength,
+      halfWidth,
+      mass,
+      crashCooldown: 0,
       isPlayerControlled: false,
       isTraffic,
       roadSeg: null,
@@ -254,9 +275,11 @@ export class VehicleSystem {
 
     const headIntensity = 0.8 + nightFactor * 3.0;
     const flash = Math.sin(performance.now() * 0.02) > 0;
+    this.footBumpCooldown = Math.max(0, this.footBumpCooldown - dt);
 
     for (let i = this.vehicles.length - 1; i >= 0; i--) {
       const v = this.vehicles[i];
+      v.crashCooldown = Math.max(0, v.crashCooldown - dt);
 
       if (v.isTraffic && v.position.distanceTo(playerPos) > 225) {
         this.scene.remove(v.mesh);
@@ -286,7 +309,52 @@ export class VehicleSystem {
         v.position.z += fwdZ * v.speed * dt;
       }
 
-      // Spin all wheels smoothly & tilt front steering wheels visually
+      // Damaged traffic/parked vehicles also emit dark engine smoke!
+      if (!v.isPlayerControlled && v.health < v.maxHealth * 0.55 && Math.random() < dt * 4.5) {
+        const hoodPos = v.position.clone().add(new THREE.Vector3(-Math.sin(v.yaw) * (v.halfLength * 0.65), 0.95, -Math.cos(v.yaw) * (v.halfLength * 0.65)));
+        this.spawnSmoke(hoodPos, true);
+      }
+    }
+
+    // Resolve all vehicle-to-vehicle touches & collisions (damage, pushback, wobble, sparks & crash audio!)
+    this.resolveVehicleCollisions(playerPos);
+
+    // Check if any moving traffic vehicle touches the player while on foot
+    if (!this.activeVehicle && this.footBumpCooldown <= 0) {
+      for (const v of this.vehicles) {
+        if (Math.abs(v.speed) < 2.2) continue;
+        const dx = playerPos.x - v.position.x;
+        const dz = playerPos.z - v.position.z;
+        const fwdX = -Math.sin(v.yaw);
+        const fwdZ = -Math.cos(v.yaw);
+        const rightX = Math.cos(v.yaw);
+        const rightZ = -Math.sin(v.yaw);
+        const localFwd = dx * fwdX + dz * fwdZ;
+        const localRight = dx * rightX + dz * rightZ;
+        if (Math.abs(localFwd) < v.halfLength + 0.55 && Math.abs(localRight) < v.halfWidth + 0.45) {
+          const intensity = THREE.MathUtils.clamp(Math.abs(v.speed) / 18, 0.25, 1.0);
+          const pushDir = new THREE.Vector3(fwdX, 0, fwdZ).normalize();
+          const dmg = Math.round(6 + intensity * 18);
+          this.footBumpCooldown = 0.75;
+          v.speed *= 0.25;
+          this.onHonk?.(v.kind, 0);
+          this.onCrash?.({
+            intensity,
+            kind: 'person',
+            point: playerPos.clone().add(new THREE.Vector3(0, 0.9, 0)),
+            normal: pushDir,
+            damage: dmg,
+            distance: 0,
+            involvesPlayer: true
+          });
+          this.onPlayerBumpedOnFoot?.(dmg, pushDir, intensity);
+          break;
+        }
+      }
+    }
+
+    // Sync final transforms, wheel rotation, and damage wobble after collision separation
+    for (const v of this.vehicles) {
       const wheelSpin = v.speed * dt * 2.8;
       for (const w of v.wheels) {
         w.rotation.x -= wheelSpin;
@@ -294,12 +362,11 @@ export class VehicleSystem {
 
       const damageRatio = 1 - v.health / v.maxHealth;
       v.wobblePhase += dt * (9 + Math.abs(v.speed) * 0.45);
-      const wobble = damageRatio > 0.35 ? Math.sin(v.wobblePhase) * 0.05 * damageRatio : 0;
+      const wobble = damageRatio > 0.25 ? Math.sin(v.wobblePhase) * 0.055 * damageRatio : 0;
 
       v.mesh.position.copy(v.position);
       v.mesh.rotation.y = v.yaw;
 
-      // Suspension pitch/roll + motorcycle cornering lean!
       const leanMult = v.kind === 'bike' ? 0.34 : 0.075;
       const targetRoll = v.steer * -leanMult * Math.min(1, Math.abs(v.speed) / 14);
       v.rollTilt = THREE.MathUtils.lerp(v.rollTilt, targetRoll, dt * 8);
@@ -332,17 +399,20 @@ export class VehicleSystem {
     }
     v.honkCooldown = Math.max(0, v.honkCooldown - dt);
 
-    // Arcade-realistic acceleration, braking, reverse & suspension nose pitch
+    // Arcade-realistic acceleration, braking, reverse & suspension nose pitch (damaged vehicles limp slower)
+    const healthMult = v.health <= 0 ? 0.22 : v.health < v.maxHealth * 0.3 ? 0.62 : 1.0;
+    const effMaxSpeed = v.maxSpeed * healthMult;
+    const effAccel = v.accel * (v.health <= 0 ? 0.35 : 1.0);
     let targetPitch = 0;
     if (throttle > 0) {
-      v.speed = Math.min(v.maxSpeed, v.speed + v.accel * throttle * dt);
+      v.speed = Math.min(effMaxSpeed, v.speed + effAccel * throttle * dt);
       targetPitch = 0.032; // Nose lifts slightly on hard acceleration
     } else if (throttle < 0) {
       if (v.speed > 1.5) {
         v.speed = Math.max(0, v.speed - v.accel * 2.1 * dt);
         targetPitch = -0.048; // Nose dives on braking
       } else {
-        v.speed = Math.max(-v.maxSpeed * 0.38, v.speed + v.accel * 0.85 * throttle * dt);
+        v.speed = Math.max(-effMaxSpeed * 0.38, v.speed + effAccel * 0.85 * throttle * dt);
       }
     } else {
       v.speed *= Math.max(0, 1 - dt * 1.25);
@@ -427,9 +497,27 @@ export class VehicleSystem {
       }
 
       if (closestBuildingHit || cornerBlocked) {
-        if (Math.abs(v.speed) > 7) {
-          v.health = Math.max(15, v.health - Math.abs(v.speed) * 0.65);
-          this.onCrash?.(Math.min(1, Math.abs(v.speed) / 30));
+        const impactSpeed = Math.abs(v.speed);
+        if (impactSpeed > 1.2 && v.crashCooldown <= 0) {
+          const dmg = Math.max(2, impactSpeed * 0.85);
+          v.health = Math.max(0, v.health - dmg);
+          v.crashCooldown = 0.28;
+          const intensity = THREE.MathUtils.clamp(impactSpeed / 24, 0.22, 1.0);
+          const contactPoint = new THREE.Vector3(
+            v.position.x + moveDir.x * (v.halfLength + 0.1),
+            0.9,
+            v.position.z + moveDir.z * (v.halfLength + 0.1)
+          );
+          const hitNormal = closestBuildingHit ? closestBuildingHit.normal.clone() : moveDir.clone().negate();
+          this.onCrash?.({
+            intensity,
+            kind: 'building',
+            point: contactPoint,
+            normal: hitNormal,
+            damage: dmg,
+            distance: 0,
+            involvesPlayer: true
+          });
         }
         if (closestBuildingHit) {
           // Halt cleanly flush right in front of the building wall (never entering it!)
@@ -440,7 +528,7 @@ export class VehicleSystem {
         }
         v.speed = 0;
         v.driftVel = 0;
-        v.pitchTilt = -0.055; // Impact brake dive feel
+        v.pitchTilt = -0.065; // Impact brake dive feel
       } else {
         v.position.x = candX;
         v.position.z = candZ;
@@ -486,6 +574,152 @@ export class VehicleSystem {
     const targetFov = 58 + Math.min(20, Math.abs(v.speed) * 0.45);
     camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, dt * 5);
     camera.updateProjectionMatrix();
+  }
+
+  private resolveVehicleCollisions(playerPos: THREE.Vector3): void {
+    const list = this.vehicles;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+
+        // Quick broad-phase rejection
+        const dx = b.position.x - a.position.x;
+        const dz = b.position.z - a.position.z;
+        const maxR = a.halfLength + b.halfLength + 1.0;
+        if (Math.abs(dx) > maxR || Math.abs(dz) > maxR) continue;
+        if (Math.abs(a.position.y - b.position.y) > 2.2) continue;
+
+        // 2D SAT (Separating Axis Theorem) over both vehicles' oriented footprints
+        const aFwdX = -Math.sin(a.yaw);
+        const aFwdZ = -Math.cos(a.yaw);
+        const aRightX = Math.cos(a.yaw);
+        const aRightZ = -Math.sin(a.yaw);
+
+        const bFwdX = -Math.sin(b.yaw);
+        const bFwdZ = -Math.cos(b.yaw);
+        const bRightX = Math.cos(b.yaw);
+        const bRightZ = -Math.sin(b.yaw);
+
+        const axes: Array<[number, number]> = [
+          [aFwdX, aFwdZ],
+          [aRightX, aRightZ],
+          [bFwdX, bFwdZ],
+          [bRightX, bRightZ]
+        ];
+
+        let minOverlap = Infinity;
+        let sepX = 0;
+        let sepZ = 0;
+        let separated = false;
+
+        for (const [ax, az] of axes) {
+          const distProj = Math.abs(dx * ax + dz * az);
+          const aProj =
+            Math.abs(aFwdX * ax + aFwdZ * az) * a.halfLength +
+            Math.abs(aRightX * ax + aRightZ * az) * a.halfWidth;
+          const bProj =
+            Math.abs(bFwdX * ax + bFwdZ * az) * b.halfLength +
+            Math.abs(bRightX * ax + bRightZ * az) * b.halfWidth;
+          const overlap = aProj + bProj - distProj;
+          if (overlap <= 0) {
+            separated = true;
+            break;
+          }
+          if (overlap < minOverlap) {
+            minOverlap = overlap;
+            const sign = dx * ax + dz * az >= 0 ? 1 : -1;
+            sepX = ax * sign;
+            sepZ = az * sign;
+          }
+        }
+
+        if (separated || minOverlap <= 0.001) continue;
+
+        // Separate the touching vehicles according to mass (without pushing into a building!)
+        const totalMass = a.mass + b.mass;
+        const aShare = b.mass / totalMass;
+        const bShare = a.mass / totalMass;
+        const push = minOverlap + 0.06;
+
+        const nextAx = a.position.x - sepX * push * aShare;
+        const nextAz = a.position.z - sepZ * push * aShare;
+        if (!this.physics.isPointBlocked(nextAx, 1.0, nextAz)) {
+          a.position.x = nextAx;
+          a.position.z = nextAz;
+        }
+        const nextBx = b.position.x + sepX * push * bShare;
+        const nextBz = b.position.z + sepZ * push * bShare;
+        if (!this.physics.isPointBlocked(nextBx, 1.0, nextBz)) {
+          b.position.x = nextBx;
+          b.position.z = nextBz;
+        }
+
+        // Compute relative impact velocity along the contact normal
+        const aVx = aFwdX * a.speed + aRightX * a.driftVel;
+        const aVz = aFwdZ * a.speed + aRightZ * a.driftVel;
+        const bVx = bFwdX * b.speed + bRightX * b.driftVel;
+        const bVz = bFwdZ * b.speed + bRightZ * b.driftVel;
+
+        const relClosing = (aVx - bVx) * sepX + (aVz - bVz) * sepZ;
+        const relMag = Math.hypot(aVx - bVx, aVz - bVz);
+        const impactSpeed = Math.max(relClosing, relMag * 0.65);
+
+        const involvesPlayer = a.isPlayerControlled || b.isPlayerControlled;
+        const contactPoint = new THREE.Vector3(
+          (a.position.x + b.position.x) * 0.5,
+          0.85,
+          (a.position.z + b.position.z) * 0.5
+        );
+        const distToPlayer = involvesPlayer ? 0 : contactPoint.distanceTo(playerPos);
+
+        // Dampen / bounce speeds and jolt suspension on contact
+        a.speed *= 0.35;
+        b.speed *= 0.35;
+        a.driftVel *= 0.25;
+        b.driftVel *= 0.25;
+        a.pitchTilt = -0.055;
+        b.pitchTilt = 0.055;
+        a.rollTilt += (Math.random() - 0.5) * 0.14;
+        b.rollTilt += (Math.random() - 0.5) * 0.14;
+
+        // Apply damage & emit crash sound even on gentle vehicle touches!
+        if (impactSpeed > 0.85 && a.crashCooldown <= 0 && b.crashCooldown <= 0) {
+          const baseDmg = Math.max(3, impactSpeed * 1.15);
+          const dmgA = baseDmg * (b.mass / a.mass) * 0.75;
+          const dmgB = baseDmg * (a.mass / b.mass) * 0.75;
+
+          a.health = Math.max(0, a.health - Math.min(42, dmgA));
+          b.health = Math.max(0, b.health - Math.min(42, dmgB));
+          a.crashCooldown = 0.26;
+          b.crashCooldown = 0.26;
+
+          const intensity = THREE.MathUtils.clamp(impactSpeed / 20, 0.24, 1.0);
+          const reportedDamage = a.isPlayerControlled ? dmgA : b.isPlayerControlled ? dmgB : Math.max(dmgA, dmgB);
+
+          if (distToPlayer < 80) {
+            this.onCrash?.({
+              intensity,
+              kind: 'vehicle',
+              point: contactPoint,
+              normal: new THREE.Vector3(-sepX, 0.35, -sepZ).normalize(),
+              damage: Math.min(42, reportedDamage),
+              distance: distToPlayer,
+              involvesPlayer
+            });
+          }
+
+          // Angry Bengaluru street horn when you bump another vehicle!
+          if (involvesPlayer) {
+            const other = a.isPlayerControlled ? b : a;
+            if (other.honkCooldown <= 0) {
+              this.onHonk?.(other.kind, 4);
+              other.honkCooldown = 1.6;
+            }
+          }
+        }
+      }
+    }
   }
 
   private updateTrafficVehicle(v: VehicleInstance, dt: number, playerPos: THREE.Vector3): void {

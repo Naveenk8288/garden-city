@@ -286,6 +286,45 @@ class GardenCityGame {
       this.audio.playHorn(kind, dist);
     };
 
+    this.vehicles.onCrash = (ev) => {
+      this.audio.playVehicleCrash(ev.intensity, ev.kind, ev.distance);
+      const sparkColor = ev.kind === 'vehicle' ? 0xffc857 : ev.kind === 'building' ? 0xff9f43 : 0xff5e6c;
+      this.vfx.spawnSparks(ev.point, ev.normal, Math.round(5 + ev.intensity * 14), sparkColor);
+
+      if (ev.involvesPlayer) {
+        this.damageFlash = Math.min(0.85, this.damageFlash + ev.intensity * 0.45);
+        if (this.player.inVehicle && ev.intensity > 0.65) {
+          const shock = Math.round((ev.intensity - 0.55) * 18);
+          if (shock > 0 && this.player.takeDamage(shock)) {
+            this.handlePlayerKnockout();
+          }
+        }
+        const av = this.vehicles.activeVehicle;
+        if (av && av.health <= 0) {
+          this.shopMetroUI.showToast(
+            `💥 ${av.name} wrecked! Press [${this.input.interactKey.replace('Key', '')}] to exit`,
+            3.2
+          );
+        } else if (this.player.inVehicle && ev.damage >= 3) {
+          const hitLabel = ev.kind === 'vehicle' ? 'Vehicle Crash' : ev.kind === 'building' ? 'Wall Impact' : 'Impact';
+          this.shopMetroUI.showToast(`💥 ${hitLabel}! -${Math.round(ev.damage)} Vehicle HP`, 1.4);
+        }
+      }
+    };
+
+    this.vehicles.onPlayerBumpedOnFoot = (dmg, pushDir) => {
+      const knockedOut = this.player.takeDamage(dmg);
+      this.player.teleport(
+        this.player.position.x + pushDir.x * 1.4,
+        this.player.position.y,
+        this.player.position.z + pushDir.z * 1.4
+      );
+      this.shopMetroUI.showToast(`💥 Hit by traffic! -${dmg} HP`, 1.6);
+      if (knockedOut) {
+        this.handlePlayerKnockout();
+      }
+    };
+
     this.vehicles.onVehicleStolen = () => {
       this.wanted.reportCrime(32);
       this.shopMetroUI.showToast('Vehicle commandeered — Metro Patrol alerted!');
@@ -593,7 +632,16 @@ class GardenCityGame {
         const rdEl = document.getElementById('hud-radio-station');
         if (spEl) spEl.textContent = `${Math.round(Math.abs(av.speed) * 3.6)}`;
         if (nmEl) nmEl.textContent = av.name;
-        if (hpEl) hpEl.style.width = `${Math.max(0, (av.health / av.maxHealth) * 100)}%`;
+        if (hpEl) {
+          const pct = Math.max(0, (av.health / av.maxHealth) * 100);
+          hpEl.style.width = `${pct}%`;
+          hpEl.style.background =
+            pct > 55
+              ? 'linear-gradient(90deg, #22c55e, #84cc16)'
+              : pct > 25
+                ? 'linear-gradient(90deg, #f59e0b, #facc15)'
+                : 'linear-gradient(90deg, #ef4444, #f97316)';
+        }
         const radio = this.vehicles.getCurrentRadio();
         if (rdEl) rdEl.textContent = `${radio.name} • ${radio.genre}`;
       }
@@ -976,11 +1024,17 @@ class GardenCityGame {
       if (vehRes.playerWorldPos && this.vehicles.activeVehicle) {
         this.player.teleport(vehRes.playerWorldPos.x, vehRes.playerWorldPos.y, vehRes.playerWorldPos.z);
         const av = this.vehicles.activeVehicle;
-        this.enemies.checkVehicleRamming(
-          av.position,
-          av.speed,
-          new THREE.Vector3(-Math.sin(av.yaw), 0, -Math.cos(av.yaw))
-        );
+        const fwdDir = new THREE.Vector3(-Math.sin(av.yaw), 0, -Math.cos(av.yaw));
+        const ramHits = this.enemies.checkVehicleRamming(av.position, av.speed, fwdDir);
+        if (ramHits.length > 0 && av.crashCooldown <= 0) {
+          const intensity = THREE.MathUtils.clamp(Math.abs(av.speed) / 22, 0.28, 0.95);
+          const dmg = Math.max(2, Math.abs(av.speed) * 0.35);
+          av.health = Math.max(0, av.health - dmg);
+          av.crashCooldown = 0.25;
+          this.audio.playVehicleCrash(intensity, 'person', 0);
+          this.vfx.spawnSparks(ramHits[0], fwdDir.clone().negate(), 8, 0xff6b6b);
+          this.damageFlash = Math.min(0.65, this.damageFlash + 0.22);
+        }
       }
 
       // Enemy AI & Wanted update
