@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Garden City Underworld — Bengaluru</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B0F1A'/%3E%3Cpath d='M14 48V24l10-8 8 6 10-10 8 8v28H14z' fill='%2300E5C3' opacity='0.85'/%3E%3Ccircle cx='44' cy='18' r='6' fill='%23FF2E88'/%3E%3Crect x='14' y='46' width='36' height='4' fill='%23FFB020'/%3E%3C/svg%3E"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,6 +19,23 @@
   <body>
     <div id="game-root">
       <canvas id="game-canvas"></canvas>
+
+      <!-- WebGL2 Missing Fallback Screen (Friendly error for unsupported browsers) -->
+      <div id="webgl2-error-screen" class="overlay-screen webgl2-error-screen hidden">
+        <div class="webgl2-error-card">
+          <div class="webgl2-kicker">GRAPHICS REQUIREMENT • WEBGL2 REQUIRED</div>
+          <h2>WebGL2 Graphics Context Unavailable</h2>
+          <p>
+            <strong>Garden City Underworld</strong> requires <strong>WebGL2</strong> hardware acceleration to render Bengaluru in 3D.
+            Your current browser or graphics driver does not have WebGL2 enabled.
+          </p>
+          <div class="webgl2-matrix">
+            <div><strong>Supported Browsers:</strong> Chrome 100+, Edge 100+, Safari 16.4+, Firefox 110+, Android Chrome / WebView</div>
+            <div><strong>Troubleshooting:</strong> Enable Hardware Acceleration in browser settings, update GPU drivers, or switch to a supported browser.</div>
+          </div>
+          <button onclick="window.location.reload()" class="btn-primary">RETRY DETECTION</button>
+        </div>
+      </div>
 
       <!-- Title / Loading Screen -->
       <div id="title-screen" class="overlay-screen">
@@ -275,12 +297,35 @@
           <h2>PAUSED — GARDEN CITY UNDERWORLD</h2>
           <div class="settings-grid">
             <label>
-              Graphics Quality
+              Graphics Quality Tier
               <select id="set-graphics">
-                <option value="low">Low (Max FPS)</option>
-                <option value="medium">Medium (Balanced)</option>
-                <option value="high" selected>High (4K MSAA Crisp)</option>
-                <option value="ultra">4K Ultra (SSAO + DoF + 4096 Shadows)</option>
+                <option value="auto" selected>Auto-Detect (Recommended)</option>
+                <option value="lite">LITE (30 FPS • 720p • Low Power)</option>
+                <option value="medium">MEDIUM (45–60 FPS • 1080p)</option>
+                <option value="high">HIGH (60–120 FPS • High Fidelity)</option>
+              </select>
+            </label>
+            <label>
+              Frame Rate Limiter
+              <select id="set-fps-limit">
+                <option value="30">30 FPS (Battery Friendly)</option>
+                <option value="60" selected>60 FPS (Standard)</option>
+                <option value="120">120 FPS (ProMotion / High-Hz)</option>
+                <option value="0">Uncapped</option>
+              </select>
+            </label>
+            <label>
+              Dynamic Resolution Scaling (DRS)
+              <select id="set-drs">
+                <option value="on" selected>Enabled (Auto-scales down to 60%)</option>
+                <option value="off">Disabled (Fixed Scale)</option>
+              </select>
+            </label>
+            <label>
+              Laptop / Mobile Power Saver
+              <select id="set-power-saver">
+                <option value="off" selected>Off (Full Tier Performance)</option>
+                <option value="on">On (30 FPS Cap + LITE Effects)</option>
               </select>
             </label>
             <label>
@@ -325,10 +370,12 @@
               </select>
             </label>
           </div>
+          <div id="settings-device-info" class="device-info-box"></div>
           <div class="pause-actions">
             <button id="btn-resume" class="btn-primary">RESUME GAME</button>
+            <button id="btn-rerun-bench" class="btn-secondary">RE-RUN 5s BENCHMARK</button>
             <button id="btn-pause-vault" class="btn-secondary">CHARACTERS &amp; VAULT [K]</button>
-            <button id="btn-open-credits-pause" class="btn-secondary">CREDITS &amp; OSM ATTRIBUTION</button>
+            <button id="btn-open-credits-pause" class="btn-secondary">CREDITS &amp; MIN SPECS</button>
             <button id="btn-respawn" class="btn-secondary">RETURN TO CENTRAL SAFEHOUSE</button>
           </div>
         </div>
@@ -381,8 +428,15 @@
             All temples, mosques, churches, and places of worship are strictly protected as combat-free safe zones.
           </p>
           <p class="credits-tech">
-            Built with Vite, Three.js (WebGL2), Rapier3D WASM Physics, Web Audio Procedural Soundscape, and GeoJSON Chunk Streaming.
+            Built with Vite, Three.js (WebGL2 + optional WebGPU probe), Rapier3D WASM Physics, Web Audio Procedural Soundscape, and GeoJSON Chunk Streaming.
           </p>
+          <div class="min-spec-box">
+            <strong>Supported Platforms &amp; Minimum Specifications:</strong><br />
+            • <strong>Browsers:</strong> Chrome 100+, Edge 100+, Safari 16.4+, Firefox 110+, Android Chrome/WebView (WebGL2 required)<br />
+            • <strong>LITE (30 FPS / 720p):</strong> 3 GB Android phone, or Intel UHD 620 / AMD Vega 3 laptop (8 GB RAM)<br />
+            • <strong>MEDIUM (45–60 FPS / 1080p):</strong> Mid-range Android, Intel Iris Xe, Radeon 680M, Intel MacBook Air, GTX 1650<br />
+            • <strong>HIGH (60–120 FPS):</strong> Flagship phone, Apple M1/M2/M3/M4, RTX 3050+, Radeon RX 6600+
+          </div>
           <button id="btn-close-credits" class="btn-primary">CLOSE</button>
         </div>
       </div>

@@ -29,11 +29,14 @@ export class ProceduralTextures {
   public buildings: BuildingMaterialSet;
 
   private maxAniso: number;
+  private textureSizeCap: number;
+  private allTextures: THREE.CanvasTexture[] = [];
   private signCache = new Map<string, THREE.CanvasTexture>();
   private shopCache = new Map<string, THREE.CanvasTexture>();
 
-  constructor(maxAnisotropy = 16) {
-    this.maxAniso = Math.max(4, Math.min(16, maxAnisotropy));
+  constructor(maxAnisotropy = 16, textureSizeCap = 1024) {
+    this.maxAniso = Math.max(2, Math.min(16, maxAnisotropy));
+    this.textureSizeCap = Math.max(256, Math.min(2048, textureSizeCap));
 
     this.roadMajorMat = this.makeRoadMaterial(true);
     this.roadMinorMat = this.makeRoadMaterial(false);
@@ -83,6 +86,14 @@ export class ProceduralTextures {
     };
   }
 
+  public setAnisotropy(aniso: number): void {
+    this.maxAniso = Math.max(1, Math.min(16, aniso));
+    for (const t of this.allTextures) {
+      t.anisotropy = this.maxAniso;
+      t.needsUpdate = true;
+    }
+  }
+
   private configureTex(tex: THREE.CanvasTexture, repeat = true, isColor = true): THREE.CanvasTexture {
     if (repeat) {
       tex.wrapS = THREE.RepeatWrapping;
@@ -91,15 +102,23 @@ export class ProceduralTextures {
     if (isColor) tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = this.maxAniso;
     tex.needsUpdate = true;
+    this.allTextures.push(tex);
     return tex;
+  }
+
+  private makeScaledCanvas(logicalW: number, logicalH: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+    const scale = Math.min(1, this.textureSizeCap / Math.max(logicalW, logicalH));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(64, Math.round(logicalW * scale));
+    canvas.height = Math.max(64, Math.round(logicalH * scale));
+    const ctx = canvas.getContext('2d')!;
+    if (scale < 1) ctx.scale(scale, scale);
+    return { canvas, ctx };
   }
 
   private makeRoadMaterial(major: boolean): THREE.MeshStandardMaterial {
     const size = 1024;
-    const c = document.createElement('canvas');
-    c.width = size;
-    c.height = size;
-    const ctx = c.getContext('2d')!;
+    const { canvas: c, ctx } = this.makeScaledCanvas(size, size);
 
     // Rich dark charcoal asphalt with subtle wheel-track sheen
     ctx.fillStyle = major ? '#1e222a' : '#262b34';
@@ -283,22 +302,13 @@ export class ProceduralTextures {
     style: 'heritage' | 'commercial' | 'glass' | 'residential' | 'industrial'
   ): THREE.MeshStandardMaterial {
     const size = 1024;
-    const c = document.createElement('canvas');
-    c.width = size;
-    c.height = size;
-    const ctx = c.getContext('2d')!;
+    const { canvas: c, ctx } = this.makeScaledCanvas(size, size);
 
-    const ec = document.createElement('canvas');
-    ec.width = 512;
-    ec.height = 512;
-    const ectx = ec.getContext('2d')!;
+    const { canvas: ec, ctx: ectx } = this.makeScaledCanvas(512, 512);
     ectx.fillStyle = '#000000';
     ectx.fillRect(0, 0, 512, 512);
 
-    const bc = document.createElement('canvas');
-    bc.width = 512;
-    bc.height = 512;
-    const bctx = bc.getContext('2d')!;
+    const { canvas: bc, ctx: bctx } = this.makeScaledCanvas(512, 512);
     bctx.fillStyle = '#c8c8c8';
     bctx.fillRect(0, 0, 512, 512);
 
@@ -420,10 +430,7 @@ export class ProceduralTextures {
     const cached = this.signCache.get(key);
     if (cached) return cached;
 
-    const c = document.createElement('canvas');
-    c.width = 1024;
-    c.height = 384;
-    const ctx = c.getContext('2d')!;
+    const { canvas: c, ctx } = this.makeScaledCanvas(1024, 384);
 
     ctx.fillStyle = '#0a3678';
     ctx.fillRect(0, 0, 1024, 384);
@@ -454,10 +461,7 @@ export class ProceduralTextures {
     const cached = this.shopCache.get(key);
     if (cached) return cached;
 
-    const c = document.createElement('canvas');
-    c.width = 1024;
-    c.height = 320;
-    const ctx = c.getContext('2d')!;
+    const { canvas: c, ctx } = this.makeScaledCanvas(1024, 320);
 
     ctx.fillStyle = '#111624';
     ctx.fillRect(0, 0, 1024, 320);

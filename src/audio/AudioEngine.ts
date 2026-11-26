@@ -19,6 +19,8 @@ export class AudioEngine {
   private sirenGain!: GainNode;
 
   public volume = 0.75;
+  public maxVoices = 32;
+  private voiceEndTimes: number[] = [];
   private initialized = false;
   private ambientTimer = 4;
   private radioStepTimer = 0;
@@ -100,8 +102,34 @@ export class AudioEngine {
     }
   }
 
+  public setMaxVoices(limit: number): void {
+    this.maxVoices = Math.max(8, Math.min(64, limit));
+  }
+
+  private acquireVoice(durationSec: number, voicesNeeded = 1): boolean {
+    if (!this.ctx) return false;
+    const now = this.ctx.currentTime;
+    // Prune expired voices
+    let write = 0;
+    for (let i = 0; i < this.voiceEndTimes.length; i++) {
+      if (this.voiceEndTimes[i] > now) {
+        this.voiceEndTimes[write++] = this.voiceEndTimes[i];
+      }
+    }
+    this.voiceEndTimes.length = write;
+    // Reserve 3 continuous voices (rain, engine, siren) inside the cap
+    if (this.voiceEndTimes.length + voicesNeeded + 3 > this.maxVoices) {
+      return false;
+    }
+    const end = now + durationSec;
+    for (let k = 0; k < voicesNeeded; k++) {
+      this.voiceEndTimes.push(end);
+    }
+    return true;
+  }
+
   public playGunshot(weaponId: WeaponId, volumeScale = 1.0): void {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.acquireVoice(0.28, 2)) return;
     const t = this.ctx.currentTime;
 
     if (weaponId === 'silenced_pistol') {
@@ -275,7 +303,7 @@ export class AudioEngine {
     kind: 'vehicle' | 'building' | 'person' = 'vehicle',
     distance = 0
   ): void {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.acquireVoice(0.35, 3)) return;
     if (this.ctx.state === 'suspended') void this.ctx.resume();
 
     const power = Math.max(0.18, Math.min(1, intensity));
@@ -371,7 +399,7 @@ export class AudioEngine {
   }
 
   public playHorn(kind: string, distance = 0): void {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.acquireVoice(0.28, 2)) return;
     const atten = Math.max(0.03, 1 - distance / 80);
     const t = this.ctx.currentTime;
     const baseHz = kind === 'bus' || kind === 'truck' ? 210 : kind === 'auto' ? 480 : 390;
@@ -546,7 +574,7 @@ export class AudioEngine {
   }
 
   private playRadioBeat(radio: RadioStation, step: number): void {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.acquireVoice(0.2, 1)) return;
     const t = this.ctx.currentTime;
     const scale = [1, 1.125, 1.2, 1.5, 1.667, 1.875]; // Raga-inflected minor pentatonic groove
     const note = radio.rootHz * scale[(step * 3 + (step >> 2)) % scale.length];

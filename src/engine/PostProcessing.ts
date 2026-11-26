@@ -6,6 +6,7 @@ import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import type { QualityTierConfig } from './QualityManager';
 
 export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra';
 
@@ -86,6 +87,11 @@ export class PostProcessingPipeline {
   public sharpenPass: ShaderPass;
   public outputPass: OutputPass;
   public quality: GraphicsQuality = 'high';
+  public postMode: 'none' | 'medium' | 'high' = 'high';
+  public lastDrawCalls = 0;
+  public lastTriangles = 0;
+  private allowDesktopHeavyFx = true;
+  private bloomHalfRes = false;
   private renderer: THREE.WebGLRenderer;
 
   constructor(
@@ -100,10 +106,10 @@ export class PostProcessingPipeline {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.12;
 
-    // 4x MSAA WebGL2 Half-Float RenderTarget for razor-sharp anti-aliased 4K-style edges
+    // WebGL2 Half-Float RenderTarget (samples tuned dynamically by quality tier)
     const rt = new THREE.WebGLRenderTarget(width, height, {
       type: THREE.HalfFloatType,
-      samples: 4
+      samples: 2
     });
     this.composer = new EffectComposer(renderer, rt);
 
@@ -188,6 +194,51 @@ export class PostProcessingPipeline {
     this.resize(window.innerWidth, window.innerHeight);
   }
 
+  public applyQualityConfig(cfg: QualityTierConfig, effectiveDpr: number): void {
+    this.postMode = cfg.postMode;
+    this.allowDesktopHeavyFx = cfg.reflections; // Desktop Windows/Mac only, never on phones
+    this.bloomHalfRes = cfg.postMode === 'medium';
+
+    this.renderer.setPixelRatio(effectiveDpr);
+
+    // Adjust composer MSAA samples per tier to prevent mobile/MEDIUM bandwidth bottlenecks
+    const targetSamples = cfg.postMode === 'high' && cfg.reflections ? 2 : 0;
+    if (this.composer.renderTarget1.samples !== targetSamples) {
+      this.composer.renderTarget1.samples = targetSamples;
+      this.composer.renderTarget1.dispose();
+      this.composer.renderTarget2.samples = targetSamples;
+      this.composer.renderTarget2.dispose();
+    }
+
+    if (cfg.postMode === 'none') {
+      this.quality = 'low';
+      this.ssaoPass.enabled = false;
+      this.bloomPass.enabled = false;
+      this.bokehPass.enabled = false;
+      this.motionBlurPass.enabled = false;
+      this.sharpenPass.enabled = false;
+    } else if (cfg.postMode === 'medium') {
+      this.quality = 'medium';
+      this.ssaoPass.enabled = false;
+      this.bloomPass.enabled = true;
+      this.bloomPass.strength = 0.26;
+      this.bokehPass.enabled = false;
+      this.motionBlurPass.enabled = false;
+      this.sharpenPass.enabled = true;
+      this.sharpenPass.uniforms.uStrength.value = 0.2;
+    } else {
+      this.quality = 'high';
+      this.ssaoPass.enabled = false;
+      this.bloomPass.enabled = true;
+      this.bloomPass.strength = 0.34;
+      this.bokehPass.enabled = false;
+      this.motionBlurPass.enabled = true;
+      this.sharpenPass.enabled = true;
+      this.sharpenPass.uniforms.uStrength.value = 0.28;
+    }
+    this.resize(window.innerWidth, window.innerHeight);
+  }
+
   public setMotionBlur(speed01: number, yawDelta: number): void {
     if (!this.motionBlurPass.enabled) return;
     this.motionBlurPass.uniforms.uStrength.value = THREE.MathUtils.clamp(speed01, 0, 1);
@@ -198,11 +249,11 @@ export class PostProcessingPipeline {
   }
 
   public setDepthOfField(focusDist: number, aiming: boolean): void {
-    if (this.quality !== 'ultra') {
+    if (this.quality !== 'ultra' && !(this.postMode === 'high' && this.allowDesktopHeavyFx)) {
       this.bokehPass.enabled = false;
       return;
     }
-    this.bokehPass.enabled = aiming; // Crisp sharp 4K view normally, cinematic shallow DoF when ADS!
+    this.bokehPass.enabled = aiming; // Crisp sharp view normally, shallow DoF on desktop HIGH when ADS!
     const uniforms = this.bokehPass.uniforms as Record<string, THREE.IUniform>;
     uniforms.focus.value = THREE.MathUtils.clamp(focusDist, 6, 80);
     uniforms.aperture.value = 0.00014;
@@ -213,16 +264,25 @@ export class PostProcessingPipeline {
     const dpr = this.renderer.getPixelRatio();
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(width, height);
-    this.bloomPass.setSize(width, height);
+    if (this.bloomHalfRes) {
+      this.bloomPass.setSize(Math.max(1, Math.floor(width * 0.5)), Math.max(1, Math.floor(height * 0.5)));
+    } else {
+      this.bloomPass.setSize(width, height);
+    }
     this.ssaoPass.setSize(width, height);
     this.sharpenPass.uniforms.uResolution.value.set(width * dpr, height * dpr);
   }
 
   public render(): void {
-    if (this.quality === 'low') {
+    // Accumulate true full-frame draw calls & triangles across shadow + scene + post passes
+    this.renderer.info.autoReset = false;
+    this.renderer.info.reset();
+    if (this.postMode === 'none' || this.quality === 'low') {
       this.renderer.render(this.renderPass.scene, this.renderPass.camera);
     } else {
       this.composer.render();
     }
+    this.lastDrawCalls = this.renderer.info.render.calls;
+    this.lastTriangles = this.renderer.info.render.triangles;
   }
 }

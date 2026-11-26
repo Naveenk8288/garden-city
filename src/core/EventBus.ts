@@ -17,6 +17,10 @@ export type GameEventMap = {
   'ending:triggered': { ending: 'loyalty' | 'power'; title: string };
   'economy:cash': { delta: number; total: number; reason: string };
   'debug:teleport': { zone: ZoneId };
+  'quality:changed': { tier: 'lite' | 'medium' | 'high'; renderScale: number; reason: string };
+  'quality:drs': { renderScale: number; fps: number };
+  'quality:thermal': { previousTier: string; nextTier: string; avgFrameMs: number };
+  'quality:battery': { level: number; charging: boolean; suggestedPowerSaver: boolean };
 };
 
 type Listener<T> = (payload: T) => void;

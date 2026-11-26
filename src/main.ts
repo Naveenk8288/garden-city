@@ -2,7 +2,14 @@ import * as THREE from 'three';
 import './styles/main.css';
 import { PhysicsWorld } from './engine/PhysicsWorld';
 import { EnvironmentSystem, WeatherMode } from './engine/EnvironmentSystem';
-import { PostProcessingPipeline, GraphicsQuality } from './engine/PostProcessing';
+import { PostProcessingPipeline } from './engine/PostProcessing';
+import {
+  HardwareProfile,
+  checkGraphicsSupport,
+  loadSavedHardwareProfile,
+  runHardwareBenchmark
+} from './engine/DeviceProfiler';
+import { FrameLimitOption, QualityManager, QualitySelection, QualityTierConfig } from './engine/QualityManager';
 import { InputManager } from './engine/InputManager';
 import { ProceduralTextures } from './world/ProceduralTextures';
 import { ChunkStreamer } from './world/ChunkStreamer';
@@ -43,11 +50,13 @@ const SAVE_KEY = 'garden_city_underworld_save_v1';
 
 class GardenCityGame {
   private canvas: HTMLCanvasElement;
-  private renderer: THREE.WebGLRenderer;
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
+  private renderer!: THREE.WebGLRenderer;
+  private scene!: THREE.Scene;
+  private camera!: THREE.PerspectiveCamera;
+  private webgl2Ready = false;
 
   private physics = new PhysicsWorld();
+  private quality!: QualityManager;
   private env!: EnvironmentSystem;
   private post!: PostProcessingPipeline;
   private input!: InputManager;
@@ -78,7 +87,6 @@ class GardenCityGame {
   private paused = false;
   private scopeMode: 'toggle' | 'auto' = 'toggle';
   private manualScopeOn = false;
-  private clock = new THREE.Clock();
   private fpsFrames = 0;
   private fpsAccum = 0;
   private hudTimer = 0;
@@ -92,11 +100,29 @@ class GardenCityGame {
 
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-    this.renderer = new THREE.WebGLRenderer({
-      canvas: this.canvas,
-      antialias: true,
-      powerPreference: 'high-performance'
-    });
+    this.minimapCtx = (document.getElementById('minimap-canvas') as HTMLCanvasElement).getContext('2d')!;
+
+    // Verify WebGL2 before creating Three.js WebGLRenderer (shows friendly fallback screen if missing)
+    const support = checkGraphicsSupport();
+    if (!support.webgl2Supported) {
+      document.getElementById('title-screen')?.classList.add('hidden');
+      document.getElementById('webgl2-error-screen')?.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      this.renderer = new THREE.WebGLRenderer({
+        canvas: this.canvas,
+        antialias: true,
+        powerPreference: 'high-performance'
+      });
+    } catch {
+      document.getElementById('title-screen')?.classList.add('hidden');
+      document.getElementById('webgl2-error-screen')?.classList.remove('hidden');
+      return;
+    }
+
+    this.webgl2Ready = true;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -104,12 +130,15 @@ class GardenCityGame {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 3200);
-    this.minimapCtx = (document.getElementById('minimap-canvas') as HTMLCanvasElement).getContext('2d')!;
 
     window.addEventListener('resize', () => {
+      if (!this.webgl2Ready) return;
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
+      if (this.quality) {
+        this.renderer.setPixelRatio(this.quality.getEffectiveDpr());
+      }
       this.post?.resize(window.innerWidth, window.innerHeight);
     });
   }
@@ -122,10 +151,27 @@ class GardenCityGame {
   }
 
   public async boot(): Promise<void> {
-    this.setLoadProgress('Initializing Rapier3D WASM physics...', 12);
+    if (!this.webgl2Ready) return;
+
+    this.setLoadProgress('Detecting device hardware & graphics capabilities...', 8);
+    let profile: HardwareProfile | null = loadSavedHardwareProfile();
+    if (!profile) {
+      profile = await runHardwareBenchmark(
+        this.renderer,
+        (m, p) => this.setLoadProgress(m, p),
+        5000
+      );
+    }
+    this.quality = new QualityManager(profile);
+    const initialTierCfg = this.quality.getTierConfig();
+
+    this.setLoadProgress(`Quality Tier: ${initialTierCfg.tier.toUpperCase()} — Initializing Rapier3D WASM physics...`, 38);
     await this.physics.init();
 
-    this.textures = new ProceduralTextures(this.renderer.capabilities.getMaxAnisotropy());
+    this.textures = new ProceduralTextures(
+      this.renderer.capabilities.getMaxAnisotropy(),
+      initialTierCfg.textureSizeCap
+    );
     this.env = new EnvironmentSystem(this.scene, this.renderer);
     this.env.roadMaterials.push(this.textures.roadMajorMat, this.textures.roadMinorMat);
     this.env.windowMaterials.push(
@@ -139,9 +185,10 @@ class GardenCityGame {
     this.post = new PostProcessingPipeline(this.renderer, this.scene, this.camera);
     this.input = new InputManager(this.canvas);
     this.streamer = new ChunkStreamer(this.scene, this.textures, this.physics);
+    this.streamer.setStreamRadius(initialTierCfg.chunkRadius);
     this.landmarks = new HeroLandmarks(this.scene, this.physics);
 
-    await this.streamer.init((m, p) => this.setLoadProgress(m, p));
+    await this.streamer.init((m, p) => this.setLoadProgress(m, Math.max(42, p)));
 
     // Stream Central Bengaluru first, then snap spawn cleanly onto open MG Road asphalt!
     const rawSpawn = latLonToWorld(12.9756, 77.6032);
@@ -191,15 +238,124 @@ class GardenCityGame {
 
     this.buildSafehouseMarkers();
     this.wireSystemCallbacks();
+    this.wireQualityManager();
     this.loadSavedProgress();
     this.bindUI();
+    this.syncQualitySettingsUI();
+    this.exposeDebugBridge();
 
     this.setLoadProgress('Ready — Welcome to Garden City Underworld', 100);
     document.getElementById('loading-status')?.classList.add('hidden');
     document.getElementById('title-actions')?.classList.remove('hidden');
 
-    this.clock.start();
-    this.loop();
+    requestAnimationFrame(this.loop);
+  }
+
+  private wireQualityManager(): void {
+    this.quality.onApplyConfig = (cfg: QualityTierConfig, _renderScale: number, effectiveDpr: number) => {
+      this.post.applyQualityConfig(cfg, effectiveDpr);
+      this.env.applyQualityConfig(cfg);
+      this.camera.far = cfg.drawDistance;
+      this.camera.updateProjectionMatrix();
+      this.streamer.setStreamRadius(cfg.chunkRadius);
+      if (this.player) {
+        void this.streamer.ensureChunksAt(this.player.position);
+      }
+      this.vehicles.maxTrafficCap = cfg.maxTraffic;
+      this.vehicles.particleScale = cfg.particleScale;
+      this.enemies.maxNpcCap = cfg.maxNpcs;
+      this.vfx.setParticleScale(cfg.particleScale);
+      this.audio.setMaxVoices(cfg.maxAudioVoices);
+      this.textures.setAnisotropy(cfg.tier === 'lite' ? 4 : cfg.tier === 'medium' ? 8 : 16);
+      this.renderDeviceInfoBox();
+    };
+    this.quality.onNotify = (msg: string) => {
+      this.shopMetroUI.showToast(msg, 4.6);
+      this.renderDeviceInfoBox();
+    };
+    this.quality.applyNow('boot_init');
+  }
+
+  private renderDeviceInfoBox(): void {
+    const box = document.getElementById('settings-device-info');
+    if (!box || !this.quality) return;
+    const p = this.quality.profile;
+    const t = this.quality.getTelemetry();
+    const cfg = this.quality.getTierConfig();
+    const batStr = t.batteryLevel !== null ? `${t.batteryLevel}% (${t.batteryCharging ? 'Charging' : 'On Battery'})` : 'AC / Not reported';
+    const memStr = p.deviceMemoryGB !== null ? `${p.deviceMemoryGB} GB` : 'Browser hidden';
+    const hybridTip = p.isHybridGpuLikely
+      ? `<div class="hybrid-gpu-tip">⚡ <strong>Hybrid GPU Tip:</strong> Integrated GPU detected (${p.gpuRenderer}). On Windows, open <em>Settings → System → Display → Graphics</em> and set your browser to <strong>High Performance</strong> to use your discrete GPU. On Intel Macs, disable <em>Automatic Graphics Switching</em> in Battery settings.</div>`
+      : '';
+
+    box.innerHTML = `
+      <div><strong>Detected Hardware:</strong> ${p.platform.toUpperCase()} • ${p.gpuRenderer}</div>
+      <div><strong>Active Tier:</strong> ${t.tier.toUpperCase()} (Auto: ${p.recommendedTier.toUpperCase()} • Bench: ${p.benchmarkFps} FPS) &nbsp;|&nbsp; <strong>Display:</strong> ${p.screenWidth}×${p.screenHeight} @ ${p.refreshRateHz}Hz</div>
+      <div><strong>Scale:</strong> ${Math.round(t.renderScale * 100)}% • <strong>Effective DPR:</strong> ${t.effectiveDpr}x (cap ${cfg.maxDpr}x) &nbsp;|&nbsp; <strong>RAM:</strong> ${memStr} • <strong>Cores:</strong> ${p.hardwareConcurrency} &nbsp;|&nbsp; <strong>Battery:</strong> ${batStr}</div>
+      <div><strong>Min Specs:</strong> LITE 3 GB phone / UHD 620 8 GB (30 FPS 720p) • MEDIUM Iris Xe / GTX 1650 (45–60 FPS 1080p) • HIGH M1–M4 / RTX 3050+ / Flagship (60–120 FPS) • WebGL2 Required${p.webgpuAvailable ? ' (WebGPU detected, WebGL2 active)' : ''}</div>
+      ${hybridTip}
+    `;
+  }
+
+  private syncQualitySettingsUI(): void {
+    if (!this.quality) return;
+    const selG = document.getElementById('set-graphics') as HTMLSelectElement | null;
+    const selF = document.getElementById('set-fps-limit') as HTMLSelectElement | null;
+    const selD = document.getElementById('set-drs') as HTMLSelectElement | null;
+    const selP = document.getElementById('set-power-saver') as HTMLSelectElement | null;
+    if (selG) selG.value = this.quality.prefs.selection;
+    if (selF) selF.value = String(this.quality.prefs.frameLimit);
+    if (selD) selD.value = this.quality.prefs.dynamicResEnabled ? 'on' : 'off';
+    if (selP) selP.value = this.quality.prefs.powerSaver ? 'on' : 'off';
+    this.renderDeviceInfoBox();
+  }
+
+  private exposeDebugBridge(): void {
+    (window as unknown as Record<string, unknown>).__GCU_DEBUG__ = {
+      startGame: () => {
+        if (!this.started) {
+          this.started = true;
+          document.getElementById('title-screen')?.classList.add('hidden');
+          document.getElementById('hud')?.classList.remove('hidden');
+          this.syncUIBlockState();
+        }
+      },
+      setTier: (tier: QualitySelection) => {
+        this.quality.setSelection(tier);
+        this.syncQualitySettingsUI();
+      },
+      setFrameLimit: (limit: FrameLimitOption) => {
+        this.quality.setFrameLimit(limit);
+        this.syncQualitySettingsUI();
+      },
+      getSnapshot: () => {
+        const t = this.quality.getTelemetry();
+        const perfMem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } }).memory;
+        return {
+          fps: this.lastFps || t.fps,
+          smoothedFps: t.fps,
+          frameMs: t.frameMs,
+          tier: t.tier,
+          recommendedTier: this.quality.profile.recommendedTier,
+          renderScale: t.renderScale,
+          effectiveDpr: t.effectiveDpr,
+          drawCalls: this.post.lastDrawCalls || this.renderer.info.render.calls,
+          triangles: this.post.lastTriangles || this.renderer.info.render.triangles,
+          geometries: this.renderer.info.memory.geometries,
+          textures: this.renderer.info.memory.textures,
+          usedHeapMB: perfMem ? Math.round((perfMem.usedJSHeapSize / 1048576) * 10) / 10 : null,
+          totalHeapMB: perfMem ? Math.round((perfMem.totalJSHeapSize / 1048576) * 10) / 10 : null,
+          chunks: this.streamer.getLoadedChunkCount(),
+          npcs: this.enemies.units.length,
+          vehicles: this.vehicles.vehicles.length,
+          gpu: t.gpuRenderer,
+          platform: t.platform,
+          refreshHz: t.refreshRateHz,
+          webgl2: this.quality.profile.webgl2Supported,
+          webgpu: this.quality.profile.webgpuAvailable
+        };
+      }
+    };
   }
 
   private buildSafehouseMarkers(): void {
@@ -591,17 +747,37 @@ class GardenCityGame {
 
   private initDebugPanel(): void {
     this.debugPanel = new DebugPanel({
-      getStats: () => ({
-        fps: this.lastFps,
-        chunks: this.streamer.getLoadedChunkCount(),
-        npcs: this.enemies.units.length,
-        vehicles: this.vehicles.vehicles.length,
-        cash: this.missions.cash,
-        loyalty: this.campaign.loyalty,
-        power: this.campaign.power,
-        chapterLabel: this.campaign.getCurrentChapter().title,
-        holstered: this.weapons.isHolstered
-      }),
+      getStats: () => {
+        const qt = this.quality?.getTelemetry();
+        return {
+          fps: this.lastFps,
+          frameMs: qt?.frameMs,
+          tier: qt?.tier,
+          renderScale: qt?.renderScale,
+          effectiveDpr: qt?.effectiveDpr,
+          drawCalls: this.post.lastDrawCalls || this.renderer.info.render.calls,
+          triangles: this.post.lastTriangles || this.renderer.info.render.triangles,
+          gpu: qt?.gpuRenderer,
+          platform: qt?.platform,
+          refreshHz: qt?.refreshRateHz,
+          battery: qt && qt.batteryLevel !== null ? `${qt.batteryLevel}%${qt.batteryCharging ? '⚡' : ''}` : 'AC/N/A',
+          powerSaver: qt?.powerSaver,
+          frameLimit: qt?.frameLimit,
+          chunks: this.streamer.getLoadedChunkCount(),
+          npcs: this.enemies.units.length,
+          vehicles: this.vehicles.vehicles.length,
+          cash: this.missions.cash,
+          loyalty: this.campaign.loyalty,
+          power: this.campaign.power,
+          chapterLabel: this.campaign.getCurrentChapter().title,
+          holstered: this.weapons.isHolstered
+        };
+      },
+      onSetQualityTier: (tier) => {
+        this.quality.setSelection(tier);
+        this.syncQualitySettingsUI();
+        this.shopMetroUI.showToast(`Quality Tier → ${this.quality.activeTier.toUpperCase()} (${tier})`, 2.0);
+      },
       onGiveCash: (amt) => {
         this.missions.cash += amt;
         gameBus.emit('economy:cash', { delta: amt, total: this.missions.cash, reason: 'debug' });
@@ -701,10 +877,47 @@ class GardenCityGame {
     });
 
     (document.getElementById('set-graphics') as HTMLSelectElement)?.addEventListener('change', (e) => {
-      const q = (e.target as HTMLSelectElement).value as GraphicsQuality;
-      this.post.setQuality(q);
-      this.env.setQuality(q);
-      this.streamer.setStreamRadius(q === 'low' ? 1 : 2);
+      const q = (e.target as HTMLSelectElement).value as QualitySelection;
+      this.quality.setSelection(q);
+      this.syncQualitySettingsUI();
+      this.shopMetroUI.showToast(`Graphics Tier set to ${this.quality.activeTier.toUpperCase()}`, 2.2);
+    });
+
+    (document.getElementById('set-fps-limit') as HTMLSelectElement)?.addEventListener('change', (e) => {
+      const lim = Number((e.target as HTMLSelectElement).value) as FrameLimitOption;
+      this.quality.setFrameLimit(lim);
+      this.syncQualitySettingsUI();
+    });
+
+    (document.getElementById('set-drs') as HTMLSelectElement)?.addEventListener('change', (e) => {
+      this.quality.setDynamicResEnabled((e.target as HTMLSelectElement).value === 'on');
+      this.syncQualitySettingsUI();
+    });
+
+    (document.getElementById('set-power-saver') as HTMLSelectElement)?.addEventListener('change', (e) => {
+      const on = (e.target as HTMLSelectElement).value === 'on';
+      this.quality.setPowerSaver(on);
+      this.syncQualitySettingsUI();
+      this.shopMetroUI.showToast(on ? '🔋 Power Saver ON (30 FPS • LITE)' : '⚡ Power Saver OFF', 2.2);
+    });
+
+    document.getElementById('btn-rerun-bench')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-rerun-bench') as HTMLButtonElement | null;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'BENCHMARKING (5s)...';
+      }
+      const newProfile = await runHardwareBenchmark(this.renderer, undefined, 5000);
+      this.quality.applyProfile(newProfile);
+      this.syncQualitySettingsUI();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'RE-RUN 5s BENCHMARK';
+      }
+      this.shopMetroUI.showToast(
+        `Benchmark complete: ${newProfile.benchmarkFps} FPS → Recommended ${newProfile.recommendedTier.toUpperCase()}`,
+        3.5
+      );
     });
 
     (document.getElementById('set-volume') as HTMLInputElement)?.addEventListener('input', (e) => {
@@ -747,6 +960,7 @@ class GardenCityGame {
     if (this.paused) {
       this.cityMapUI.setOpen(false);
       this.shopMetroUI.closeAll();
+      this.syncQualitySettingsUI();
     }
     this.syncUIBlockState();
   }
@@ -772,7 +986,9 @@ class GardenCityGame {
       const fps = Math.round(this.fpsFrames / this.fpsAccum);
       this.lastFps = fps;
       const el = document.getElementById('hud-fps');
-      if (el) el.textContent = `${fps} FPS • ${this.streamer.getLoadedChunkCount()} tiles`;
+      const tierTag = this.quality ? this.quality.activeTier.toUpperCase() : 'HIGH';
+      const drsPct = this.quality ? Math.round(this.quality.renderScale * 100) : 100;
+      if (el) el.textContent = `${fps} FPS • ${tierTag} ${drsPct}% • ${this.streamer.getLoadedChunkCount()} tiles`;
       this.fpsFrames = 0;
       this.fpsAccum = 0;
     }
@@ -962,9 +1178,14 @@ class GardenCityGame {
     ctx.restore();
   }
 
-  private loop = (): void => {
+  private loop = (now: number = performance.now()): void => {
     requestAnimationFrame(this.loop);
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    if (!this.webgl2Ready || !this.quality) return;
+
+    const gate = this.quality.shouldRenderFrame(now);
+    if (!gate.render) return;
+
+    const dt = Math.min(gate.frameDt, 0.05);
     const input = this.input.poll(dt);
 
     if (this.started) {
@@ -1058,7 +1279,11 @@ class GardenCityGame {
       !this.shopMetroUI.metroOpen &&
       !this.shopMetroUI.shopOpen
     ) {
-      this.physics.step(dt);
+      // Fixed-timestep physics accumulator so simulation speed is identical across 30/60/120/144 Hz screens
+      const physSteps = this.quality.consumePhysicsSteps(gate.frameDt);
+      for (let s = 0; s < physSteps; s++) {
+        this.physics.stepFixed(this.quality.fixedPhysicsStep);
+      }
 
       // Kaal "Cyber DJ" passive HP regen aura (+3 HP/s)
       if (this.characterLoadout.presetId === 'kaal_dj' && this.player.health < this.player.maxHealth) {
@@ -1333,6 +1558,9 @@ class GardenCityGame {
     }
 
     this.post.render();
+    if (!this.paused) {
+      this.quality.recordFrame(gate.frameDt);
+    }
   };
 }
 

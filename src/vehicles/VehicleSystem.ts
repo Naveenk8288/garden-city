@@ -90,6 +90,8 @@ export class VehicleSystem {
   public vehicles: VehicleInstance[] = [];
   public activeVehicle: VehicleInstance | null = null;
   public radioIndex = 0;
+  public maxTrafficCap = 34;
+  public particleScale = 1.0;
 
   private scene: THREE.Scene;
   private streamer: ChunkStreamer;
@@ -258,7 +260,8 @@ export class VehicleSystem {
   }
 
   private spawnSmoke(pos: THREE.Vector3, dark: boolean): void {
-    if (this.smokePuffs.length > 48) return;
+    const maxSmoke = Math.max(8, Math.round(48 * this.particleScale));
+    if (this.smokePuffs.length > maxSmoke) return;
     const mat = new THREE.MeshBasicMaterial({
       color: dark ? 0x262930 : 0xdbe2ea,
       transparent: true,
@@ -871,8 +874,23 @@ export class VehicleSystem {
     if (roads.length === 0) return;
 
     const zone = getZoneAtWorldPos(playerPos.x, playerPos.z);
-    const maxTraffic = Math.min(36, Math.round(18 * zone.trafficDensity));
-    const currentTraffic = this.vehicles.filter((v) => v.isTraffic).length;
+    const maxTraffic = Math.min(this.maxTrafficCap, Math.round(18 * zone.trafficDensity));
+    const trafficList = this.vehicles.filter((v) => v.isTraffic);
+    // Trim farthest excess traffic immediately when stepping down quality tier
+    if (trafficList.length > maxTraffic) {
+      trafficList.sort((a, b) => b.position.distanceToSquared(playerPos) - a.position.distanceToSquared(playerPos));
+      const excess = trafficList.length - maxTraffic;
+      for (let k = 0; k < excess; k++) {
+        const victim = trafficList[k];
+        const idx = this.vehicles.indexOf(victim);
+        if (idx >= 0) {
+          this.scene.remove(victim.mesh);
+          this.vehicles.splice(idx, 1);
+        }
+      }
+      return;
+    }
+    const currentTraffic = trafficList.length;
     if (currentTraffic >= maxTraffic) return;
 
     const spawnBatch = Math.min(4, maxTraffic - currentTraffic);

@@ -35,6 +35,9 @@ export class VFXSystem {
   private decals: Decal[] = [];
   private shells: ShellCasing[] = [];
   private maxDecals = 85;
+  private maxSparks = 150;
+  private maxShells = 28;
+  private particleScale = 1.0;
 
   private sparkGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
   private sparkMat = new THREE.MeshBasicMaterial({ color: 0xffc857 });
@@ -79,6 +82,17 @@ export class VFXSystem {
     this.scene.add(this.muzzleStar);
   }
 
+  public setParticleScale(scale: number): void {
+    this.particleScale = Math.max(0.2, Math.min(1.2, scale));
+    this.maxSparks = Math.max(24, Math.round(150 * this.particleScale));
+    this.maxDecals = Math.max(20, Math.round(85 * this.particleScale));
+    this.maxShells = Math.max(6, Math.round(28 * this.particleScale));
+    while (this.decals.length > this.maxDecals) {
+      const oldest = this.decals.shift()!;
+      this.scene.remove(oldest.mesh);
+    }
+  }
+
   public spawnMuzzleFlash(worldPos: THREE.Vector3, ejectShell = true): void {
     this.muzzleLight.position.copy(worldPos);
     this.muzzleLight.intensity = 22;
@@ -87,9 +101,9 @@ export class VFXSystem {
     this.muzzleStar.visible = true;
     this.muzzleLightTimer = 0.055;
 
-    this.spawnSparks(worldPos, new THREE.Vector3(0, 1, 0), 3, 0xffd27d);
+    this.spawnSparks(worldPos, new THREE.Vector3(0, 1, 0), Math.max(1, Math.round(3 * this.particleScale)), 0xffd27d);
 
-    if (ejectShell && this.shells.length < 28) {
+    if (ejectShell && this.shells.length < this.maxShells) {
       const m = new THREE.Mesh(this.shellGeo, this.shellMat);
       m.position.copy(worldPos);
       this.scene.add(m);
@@ -124,8 +138,9 @@ export class VFXSystem {
       ? this.sparkMat
       : new THREE.MeshBasicMaterial({ color: colorHex });
 
-    for (let i = 0; i < count; i++) {
-      if (this.sparks.length > 150) break;
+    const scaledCount = Math.max(1, Math.round(count * this.particleScale));
+    for (let i = 0; i < scaledCount; i++) {
+      if (this.sparks.length > this.maxSparks) break;
       const mesh = new THREE.Mesh(this.sparkGeo, mat);
       mesh.position.copy(pos);
       this.scene.add(mesh);

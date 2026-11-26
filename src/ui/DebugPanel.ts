@@ -4,6 +4,18 @@ import { gdIconHTML, GD_PALETTE } from './GDIcon';
 export interface DebugPanelHooks {
   getStats: () => {
     fps: number;
+    frameMs?: number;
+    tier?: string;
+    renderScale?: number;
+    effectiveDpr?: number;
+    drawCalls?: number;
+    triangles?: number;
+    gpu?: string;
+    platform?: string;
+    refreshHz?: number;
+    battery?: string;
+    powerSaver?: boolean;
+    frameLimit?: number;
     chunks: number;
     npcs: number;
     vehicles: number;
@@ -13,6 +25,7 @@ export interface DebugPanelHooks {
     chapterLabel: string;
     holstered: boolean;
   };
+  onSetQualityTier?: (tier: 'auto' | 'lite' | 'medium' | 'high') => void;
   onGiveCash: (amount: number) => void;
   onSpawnEnemies: () => void;
   onTeleportZone: (zone: ZoneId) => void;
@@ -46,6 +59,13 @@ export class DebugPanel {
         <button id="gd-dbg-close" class="gd-mini-btn">✕</button>
       </div>
       <div id="gd-dbg-stats" class="gd-debug-stats"></div>
+      <div class="gd-debug-sub">QUALITY TIER OVERRIDE (LIVE PROFILING)</div>
+      <div class="gd-debug-actions">
+        <button id="gd-dbg-q-auto" class="gd-mini-btn">AUTO</button>
+        <button id="gd-dbg-q-lite" class="gd-mini-btn">LITE</button>
+        <button id="gd-dbg-q-med" class="gd-mini-btn">MEDIUM</button>
+        <button id="gd-dbg-q-high" class="gd-mini-btn">HIGH</button>
+      </div>
       <div class="gd-debug-actions">
         <button id="gd-dbg-cash" class="gd-mini-btn">${gdIconHTML('cash', 13, GD_PALETTE.amber)} +₹10,000</button>
         <button id="gd-dbg-spawn" class="gd-mini-btn">${gdIconHTML('skull', 13, GD_PALETTE.pink)} Spawn Rivals</button>
@@ -62,6 +82,10 @@ export class DebugPanel {
     this.statsEl = this.root.querySelector('#gd-dbg-stats') as HTMLDivElement;
 
     this.root.querySelector('#gd-dbg-close')?.addEventListener('click', () => this.toggle(false));
+    this.root.querySelector('#gd-dbg-q-auto')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('auto'); this.refreshStats(); });
+    this.root.querySelector('#gd-dbg-q-lite')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('lite'); this.refreshStats(); });
+    this.root.querySelector('#gd-dbg-q-med')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('medium'); this.refreshStats(); });
+    this.root.querySelector('#gd-dbg-q-high')?.addEventListener('click', () => { this.hooks.onSetQualityTier?.('high'); this.refreshStats(); });
     this.root.querySelector('#gd-dbg-cash')?.addEventListener('click', () => this.hooks.onGiveCash(10000));
     this.root.querySelector('#gd-dbg-spawn')?.addEventListener('click', () => this.hooks.onSpawnEnemies());
     this.root.querySelector('#gd-dbg-dlg')?.addEventListener('click', () => this.hooks.onTriggerDialogueTest());
@@ -110,11 +134,16 @@ export class DebugPanel {
       ? `${(perfMem.usedJSHeapSize / 1048576).toFixed(1)} / ${(perfMem.jsHeapSizeLimit / 1048576).toFixed(0)} MB`
       : 'N/A';
 
+    const tierLabel = (s.tier || 'HIGH').toUpperCase();
+    const limitLabel = s.frameLimit && s.frameLimit > 0 ? `${s.frameLimit} FPS` : 'Uncapped';
+    const gpuShort = (s.gpu || 'WebGL2').slice(0, 44);
     this.statsEl.innerHTML = `
-      <div><b>FPS:</b> <span style="color:${GD_PALETTE.cyan}">${s.fps}</span> &nbsp;|&nbsp; <b>Heap:</b> ${memStr}</div>
-      <div><b>Tiles:</b> ${s.chunks} &nbsp;|&nbsp; <b>NPCs:</b> ${s.npcs} &nbsp;|&nbsp; <b>Vehicles:</b> ${s.vehicles}</div>
-      <div><b>Cash:</b> ₹${s.cash.toLocaleString()} &nbsp;|&nbsp; <b>Gun:</b> ${s.holstered ? 'In Pocket' : 'Drawn'}</div>
-      <div><b>Loyalty:</b> <span style="color:${GD_PALETTE.cyan}">${s.loyalty}</span> &nbsp;|&nbsp; <b>Power:</b> <span style="color:${GD_PALETTE.pink}">${s.power}</span></div>
+      <div><b>FPS:</b> <span style="color:${GD_PALETTE.cyan}">${s.fps}</span> (${s.frameMs ?? '--'} ms • Cap: ${limitLabel}) &nbsp;|&nbsp; <b>Tier:</b> <span style="color:${GD_PALETTE.amber}">${tierLabel}</span></div>
+      <div><b>DRS:</b> ${Math.round((s.renderScale ?? 1) * 100)}% &nbsp;|&nbsp; <b>DPR:</b> ${s.effectiveDpr ?? 1}x &nbsp;|&nbsp; <b>Draws:</b> <span style="color:${GD_PALETTE.pink}">${s.drawCalls ?? '--'}</span> &nbsp;|&nbsp; <b>Tris:</b> ${s.triangles ? (s.triangles / 1000).toFixed(1) + 'k' : '--'}</div>
+      <div><b>Heap:</b> ${memStr} &nbsp;|&nbsp; <b>Battery:</b> ${s.battery || 'AC/N/A'} ${s.powerSaver ? '(Saver)' : ''}</div>
+      <div><b>Device:</b> ${(s.platform || 'web').toUpperCase()} • ${s.refreshHz ?? 60}Hz • ${gpuShort}</div>
+      <div><b>Tiles:</b> ${s.chunks} &nbsp;|&nbsp; <b>NPCs:</b> ${s.npcs} &nbsp;|&nbsp; <b>Vehicles:</b> ${s.vehicles} &nbsp;|&nbsp; <b>Gun:</b> ${s.holstered ? 'In Pocket' : 'Drawn'}</div>
+      <div><b>Cash:</b> ₹${s.cash.toLocaleString()} &nbsp;|&nbsp; <b>Loyalty:</b> <span style="color:${GD_PALETTE.cyan}">${s.loyalty}</span> &nbsp;|&nbsp; <b>Power:</b> <span style="color:${GD_PALETTE.pink}">${s.power}</span></div>
       <div><b>Story:</b> ${s.chapterLabel}</div>
     `;
   }

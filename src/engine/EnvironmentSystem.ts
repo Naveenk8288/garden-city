@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { QualityTierConfig } from './QualityManager';
 
 export type WeatherMode = 'day' | 'auto' | 'dusk' | 'rain' | 'dawn' | 'night';
 
@@ -25,6 +26,8 @@ export class EnvironmentSystem {
   private rainLines!: THREE.LineSegments;
   private rainPositions!: Float32Array;
   private rainCount = 1600;
+  private activeRainCount = 1600;
+  private reflectionsEnabled = true;
   private lightningTimer = 14;
   private lightningFlash = 0;
 
@@ -152,6 +155,38 @@ export class EnvironmentSystem {
     this.rainLines.visible = this.rainIntensity > 0.05;
   }
 
+  public applyQualityConfig(cfg: QualityTierConfig): void {
+    this.sunLight.castShadow = cfg.shadowsEnabled;
+    const s = cfg.tier === 'lite' ? 62 : cfg.tier === 'medium' ? 88 : 105;
+    this.sunLight.shadow.camera.left = -s;
+    this.sunLight.shadow.camera.right = s;
+    this.sunLight.shadow.camera.top = s;
+    this.sunLight.shadow.camera.bottom = -s;
+    this.sunLight.shadow.camera.updateProjectionMatrix();
+
+    if (this.sunLight.shadow.mapSize.x !== cfg.shadowMapSize) {
+      this.sunLight.shadow.mapSize.set(cfg.shadowMapSize, cfg.shadowMapSize);
+      this.sunLight.shadow.map?.dispose();
+      this.sunLight.shadow.map = null;
+    }
+
+    // Keep sky dome comfortably inside camera.far even on LITE drawDistance (1200m)
+    const skyScale = Math.max(0.38, Math.min(1.0, (cfg.drawDistance * 0.85) / 2800));
+    this.skyMesh.scale.setScalar(skyScale);
+
+    // Scale active rain streak vertex draw range per tier
+    this.activeRainCount = Math.max(120, Math.round(this.rainCount * cfg.particleScale));
+    this.rainLines.geometry.setDrawRange(0, this.activeRainCount * 2);
+
+    // Control wet-road & environment reflections (disabled on LITE and phones)
+    this.reflectionsEnabled = cfg.reflections;
+    if (!cfg.reflections) {
+      this.scene.environment = null;
+    } else if (this.envRT) {
+      this.scene.environment = this.envRT.texture;
+    }
+  }
+
   private rebuildHDRIEnvironment(top: THREE.Color, horizon: THREE.Color): void {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -178,7 +213,7 @@ export class EnvironmentSystem {
     tex.dispose();
     if (this.envRT) this.envRT.dispose();
     this.envRT = newRT;
-    this.scene.environment = newRT.texture;
+    this.scene.environment = this.reflectionsEnabled ? newRT.texture : null;
   }
 
   public getWeatherLabel(): string {
@@ -301,8 +336,12 @@ export class EnvironmentSystem {
     }
 
     // Dynamic wet-road PBR reflections + night window glow
-    const roadRoughness = THREE.MathUtils.lerp(0.76, 0.14, this.wetness);
-    const roadMetalness = THREE.MathUtils.lerp(0.05, 0.42, this.wetness);
+    const roadRoughness = this.reflectionsEnabled
+      ? THREE.MathUtils.lerp(0.76, 0.14, this.wetness)
+      : THREE.MathUtils.lerp(0.84, 0.56, this.wetness);
+    const roadMetalness = this.reflectionsEnabled
+      ? THREE.MathUtils.lerp(0.05, 0.42, this.wetness)
+      : 0.06;
     for (const rm of this.roadMaterials) {
       rm.roughness = roadRoughness;
       rm.metalness = roadMetalness;
@@ -327,7 +366,7 @@ export class EnvironmentSystem {
       const px = playerPos.x;
       const py = playerPos.y;
       const pz = playerPos.z;
-      for (let i = 0; i < this.rainCount; i++) {
+      for (let i = 0; i < this.activeRainCount; i++) {
         const idx = i * 6;
         let x = arr[idx] - dt * 3.5;
         let y = arr[idx + 1] - dt * speed;

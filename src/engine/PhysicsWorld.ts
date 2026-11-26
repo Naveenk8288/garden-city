@@ -36,6 +36,15 @@ export class PhysicsWorld {
     this.world.step();
   }
 
+  /**
+   * Fixed-timestep physics step (default 60 Hz) driven by QualityManager's accumulator
+   * so simulation speed is identical across 30, 60, 120, and 144 Hz displays.
+   */
+  public stepFixed(fixedDt = 1 / 60): void {
+    this.world.timestep = fixedDt;
+    this.world.step();
+  }
+
   public addChunkBoxCollider(
     chunkKey: string,
     cx: number,

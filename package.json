@@ -8,7 +8,7 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node scripts/test-phase-a.mjs",
+    "test": "node scripts/test-phase-a.mjs && node scripts/test-phase-1-quality.mjs",
     "osm:central": "node scripts/fetch-osm.mjs --zones central,metro,corridors",
     "osm:all": "node scripts/fetch-osm.mjs --zones all"
   },

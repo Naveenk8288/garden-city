@@ -63,6 +63,7 @@ export interface EnemyUnit {
 
 export class EnemyAIManager {
   public units: EnemyUnit[] = [];
+  public maxNpcCap = 28;
   private scene: THREE.Scene;
   private streamer: ChunkStreamer;
   private physics: PhysicsWorld;
@@ -571,14 +572,35 @@ export class EnemyAIManager {
       return null;
     };
 
-    const targetCivs = Math.min(18, Math.round(9 * zone.trafficDensity));
-    if (civs < targetCivs) {
+    const capScale = Math.max(0.25, this.maxNpcCap / 28);
+    const nonMissionCount = civs + rivals + police;
+    if (nonMissionCount > this.maxNpcCap) {
+      // Trim farthest ambient civilian/non-mission unit immediately on tier step-down
+      let farIdx = -1;
+      let farDist = -1;
+      for (let i = 0; i < this.units.length; i++) {
+        const u = this.units[i];
+        if (u.missionTag || u.state === 'knockout') continue;
+        if (u.faction === 'civilian' || u.faction === 'rival') {
+          const d2 = u.position.distanceToSquared(playerPos);
+          if (d2 > farDist) {
+            farDist = d2;
+            farIdx = i;
+          }
+        }
+      }
+      if (farIdx >= 0) this.removeUnit(farIdx);
+      return;
+    }
+
+    const targetCivs = Math.max(3, Math.min(Math.round(18 * capScale), Math.round(9 * zone.trafficDensity * capScale)));
+    if (civs < targetCivs && nonMissionCount < this.maxNpcCap) {
       const p = pickSpawnPos(24, 92);
       if (p) this.spawnUnit('civilian', 'grunt', p, zone.id);
     }
 
-    const targetRivals = ownedZones.has(zone.id) ? 2 : 7;
-    if (rivals < targetRivals) {
+    const targetRivals = ownedZones.has(zone.id) ? Math.max(1, Math.round(2 * capScale)) : Math.max(2, Math.round(7 * capScale));
+    if (rivals < targetRivals && nonMissionCount < this.maxNpcCap) {
       const p = pickSpawnPos(34, 108);
       if (p) {
         const roll = Math.random();
@@ -587,7 +609,7 @@ export class EnemyAIManager {
       }
     }
 
-    const targetPolice = this.wanted.getDesiredPoliceCount();
+    const targetPolice = Math.min(Math.max(2, Math.round(this.maxNpcCap * 0.35)), this.wanted.getDesiredPoliceCount());
     if (police < targetPolice) {
       const p = pickSpawnPos(36, 102);
       if (p) {

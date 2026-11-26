@@ -90,7 +90,7 @@ export class InputManager {
       if (this.uiBlocked) return;
       canvas.focus();
       if (!this.pointerLocked) {
-        try { canvas.requestPointerLock?.(); } catch { /* fallback drag look */ }
+        this.requestPointerLock();
       }
       if (e.button === 0 || e.button === 2) {
         this.draggingLook = true;
@@ -129,9 +129,17 @@ export class InputManager {
   }
 
   public requestPointerLock(): void {
-    if (!this.uiBlocked && document.pointerLockElement !== this.canvas) {
+    if (this.uiBlocked || document.hidden || !document.hasFocus()) return;
+    if (document.pointerLockElement !== this.canvas && typeof this.canvas.requestPointerLock === 'function') {
       this.canvas.focus();
-      try { this.canvas.requestPointerLock?.(); } catch { /* ignore */ }
+      try {
+        const res = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
+        if (res && typeof res.catch === 'function') {
+          res.catch(() => { /* ignore pointer lock rejection */ });
+        }
+      } catch {
+        /* ignore */
+      }
     }
   }
 

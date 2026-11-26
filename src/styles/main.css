@@ -1770,3 +1770,89 @@ html, body, #game-root {
   border-color: #FF2E88;
   background: rgba(255, 46, 136, 0.22);
 }
+
+/* ================= PHASE 1: WEBGL2 FALLBACK, DEVICE INFO & MINIMUM SPECS ================= */
+.webgl2-error-screen {
+  background: radial-gradient(circle at 50% 35%, rgba(255, 46, 136, 0.2), #0B0F1A 70%);
+  z-index: 120;
+  padding: 24px;
+}
+
+.webgl2-error-card {
+  width: 580px;
+  max-width: 94vw;
+  background: rgba(11, 15, 26, 0.96);
+  border: 1px solid #FF2E88;
+  border-left: 4px solid #FFB020;
+  border-radius: 16px;
+  padding: 26px 28px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+}
+
+.webgl2-kicker {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  color: #FF2E88;
+  margin-bottom: 6px;
+}
+
+.webgl2-error-card h2 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 28px;
+  color: #FFB020;
+  margin-bottom: 10px;
+}
+
+.webgl2-error-card p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: #e2e8f0;
+  margin-bottom: 14px;
+}
+
+.webgl2-matrix {
+  background: rgba(0, 229, 195, 0.08);
+  border: 1px solid rgba(0, 229, 195, 0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #cbd5e1;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pause-panel {
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.device-info-box, .min-spec-box {
+  background: rgba(11, 15, 26, 0.88);
+  border: 1px solid rgba(0, 229, 195, 0.32);
+  border-left: 3px solid #00E5C3;
+  border-radius: 10px;
+  padding: 11px 14px;
+  margin: 14px 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #cbd5e1;
+}
+
+.device-info-box strong, .min-spec-box strong {
+  color: #FFB020;
+}
+
+.hybrid-gpu-tip {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.45);
+  color: #fde68a;
+  font-size: 11.5px;
+}
