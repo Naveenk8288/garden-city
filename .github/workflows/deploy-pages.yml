@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -48,6 +49,25 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Wait for legacy branch Pages build (if active)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          WAITED=0
+          for i in $(seq 1 24); do
+            ACTIVE=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=20" \
+              --jq '[.workflow_runs[] | select(.name == "pages build and deployment" and .status != "completed")] | length')
+            echo "Check $i: active legacy pages runs = ${ACTIVE:-0}"
+            if [ "${ACTIVE:-0}" = "0" ]; then
+              break
+            fi
+            WAITED=1
+            sleep 5
+          done
+          if [ "$WAITED" = "1" ]; then
+            sleep 5
+          fi
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
