@@ -12,6 +12,8 @@ export interface NPCRig {
   leftKnee: THREE.Group;
   rightHip: THREE.Group;
   rightKnee: THREE.Group;
+  muzzleTip: THREE.Object3D;
+  hasGun: boolean;
   hpBg: THREE.Mesh;
   hpBarFill: THREE.Mesh;
 }
@@ -136,7 +138,14 @@ export function buildNPCCharacter(
     headGroup.add(hair);
   }
 
-  // Articulated Arms + Archetype Held Weapon
+  const muzzleTip = new THREE.Object3D();
+  let hasGun = false;
+
+  // Articulated Arms + Realistic Detailed 3D Firearms for ALL Hostile Enemies & Police!
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0xbec7d4, roughness: 0.22, metalness: 0.9 });
+  const polymerMat = new THREE.MeshStandardMaterial({ color: 0x14171d, roughness: 0.72, metalness: 0.18 });
+  const woodGripMat = new THREE.MeshStandardMaterial({ color: 0x5c3c24, roughness: 0.75 });
+
   const buildArm = (side: -1 | 1): THREE.Group => {
     const shoulder = new THREE.Group();
     shoulder.position.set(side * 0.275, 0.46, 0);
@@ -156,29 +165,80 @@ export function buildNPCCharacter(
     shoulder.add(hand);
 
     if (side === 1 && faction !== 'civilian') {
+      hasGun = true;
       const wep = new THREE.Group();
-      wep.position.set(0, -0.56, -0.05);
+      wep.position.set(0, -0.56, -0.04);
       wep.rotation.x = -Math.PI / 2;
+      let muzzleZ = -0.34;
+
       if (archetype === 'grunt') {
-        const bat = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.04, 0.72, 8), new THREE.MeshStandardMaterial({ color: 0xc9965b, roughness: 0.7 }));
-        bat.rotation.x = Math.PI / 2;
-        bat.position.z = -0.32;
-        wep.add(bat);
+        // Real 9mm Street Pistol (slide, steel barrel, polymer frame & grip) so every rival carries a real gun!
+        const slide = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.056, 0.25), gunMat);
+        slide.position.set(0, 0.045, -0.09);
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.08, 8), steelMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.044, -0.23);
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.125, 0.06), polymerMat);
+        grip.position.set(0, -0.045, 0.01);
+        grip.rotation.x = 0.2;
+        wep.add(slide, barrel, grip);
+        muzzleZ = -0.28;
       } else if (archetype === 'boss') {
-        const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.11, 0.78), gunMat);
-        rifle.position.z = -0.32;
-        const trim = new THREE.Mesh(new THREE.BoxGeometry(0.082, 0.04, 0.44), goldMat);
-        trim.position.z = -0.26;
-        wep.add(rifle, trim);
+        // Gold-Accented Tactical Assault Rifle with optic, curved mag, handguard & steel barrel
+        const rec = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.09, 0.38), gunMat);
+        rec.position.set(0, 0.05, -0.14);
+        const goldRail = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.026, 0.36), goldMat);
+        goldRail.position.set(0, 0.095, -0.18);
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.36, 10), steelMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.054, -0.5);
+        const mag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.07), goldMat);
+        mag.position.set(0, -0.09, -0.2);
+        mag.rotation.x = -0.22;
+        const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.2, 10), polymerMat);
+        scope.rotation.x = Math.PI / 2;
+        scope.position.set(0, 0.125, -0.14);
+        const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.24), polymerMat);
+        stock.position.set(0, 0.035, 0.16);
+        wep.add(rec, goldRail, barrel, mag, scope, stock);
+        muzzleZ = -0.7;
       } else if (archetype === 'brute') {
-        const sg = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.72), gunMat);
-        sg.position.z = -0.3;
-        wep.add(sg);
+        // Heavy Pump-Action Combat Shotgun (receiver, twin barrel/tube, wooden pump & stock)
+        const rec = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.088, 0.3), gunMat);
+        rec.position.set(0, 0.048, -0.1);
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.56, 10), gunMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.07, -0.46);
+        const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.48, 8), steelMat);
+        tube.rotation.x = Math.PI / 2;
+        tube.position.set(0, 0.034, -0.42);
+        const pump = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.065, 0.2), woodGripMat);
+        pump.position.set(0, 0.03, -0.36);
+        const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.095, 0.26), woodGripMat);
+        stock.position.set(0, 0.028, 0.16);
+        wep.add(rec, barrel, tube, pump, stock);
+        muzzleZ = -0.76;
       } else {
-        const smg = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.095, 0.42), gunMat);
-        smg.position.z = -0.18;
-        wep.add(smg);
+        // Detailed Compact SMG / Police Carbine (receiver, suppressor/barrel, vertical grip, extended mag)
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.086, 0.36), gunMat);
+        body.position.set(0, 0.048, -0.13);
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.24, 10), steelMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.05, -0.4);
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.115, 0.055), polymerMat);
+        grip.position.set(0, -0.042, 0.0);
+        grip.rotation.x = 0.2;
+        const mag = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.21, 0.048), gunMat);
+        mag.position.set(0, -0.095, -0.14);
+        mag.rotation.x = -0.14;
+        const stock = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.078, 0.2), polymerMat);
+        stock.position.set(0, 0.04, 0.14);
+        wep.add(body, barrel, grip, mag, stock);
+        muzzleZ = -0.54;
       }
+
+      muzzleTip.position.set(0, 0.05, muzzleZ);
+      wep.add(muzzleTip);
       shoulder.add(wep);
     }
 
@@ -244,6 +304,8 @@ export function buildNPCCharacter(
     leftKnee: leftLeg.knee,
     rightHip: rightLeg.hip,
     rightKnee: rightLeg.knee,
+    muzzleTip,
+    hasGun,
     hpBg,
     hpBarFill
   };

@@ -20,6 +20,11 @@ import { WeaponUI } from './ui/WeaponUI';
 import { CityMapUI } from './ui/CityMapUI';
 import { ShopMetroUI, SubtitleLang } from './ui/ShopMetroUI';
 import { WardrobeUI } from './ui/WardrobeUI';
+import { gameBus } from './core/EventBus';
+import { DialogueSystem } from './story/DialogueSystem';
+import { CutsceneManager } from './story/CutsceneManager';
+import { CampaignManager } from './story/CampaignManager';
+import { DebugPanel } from './ui/DebugPanel';
 import {
   CharacterLoadout,
   loadCharacterLoadout,
@@ -62,7 +67,12 @@ class GardenCityGame {
   private cityMapUI = new CityMapUI();
   private shopMetroUI = new ShopMetroUI();
   private wardrobeUI!: WardrobeUI;
+  private dialogue!: DialogueSystem;
+  private cutscenes!: CutsceneManager;
+  private campaign!: CampaignManager;
+  private debugPanel!: DebugPanel;
   private characterLoadout: CharacterLoadout = loadCharacterLoadout();
+  private lastFps = 60;
 
   private started = false;
   private paused = false;
@@ -151,7 +161,13 @@ class GardenCityGame {
 
     this.vfx = new VFXSystem(this.scene);
     this.weaponUI.attachScene(this.scene);
-    this.weapons = new WeaponSystem(this.player.weaponMount, this.physics, this.vfx);
+    this.weapons = new WeaponSystem(
+      this.player.weaponMount,
+      this.physics,
+      this.vfx,
+      this.player.pocketHolster,
+      this.player.backHolster
+    );
     this.applyCharacterPerks(this.characterLoadout);
     this.wanted = new WantedSystem();
     this.enemies = new EnemyAIManager(this.scene, this.streamer, this.physics, this.vfx, this.wanted);
@@ -159,6 +175,10 @@ class GardenCityGame {
     this.vehicles.setPlayerLoadout(this.characterLoadout);
     this.metroTrains = new MetroTrainSystem(this.scene);
     this.missions = new MissionSystem(this.scene, this.enemies, this.wanted, this.vehicles);
+    this.dialogue = new DialogueSystem();
+    this.cutscenes = new CutsceneManager();
+    this.campaign = new CampaignManager(this.dialogue, this.cutscenes, true);
+    this.initDebugPanel();
 
     // Park iconic starter Bengaluru vehicles neatly along the road ahead of the player
     const rFwdX = -Math.sin(roadSpot.yaw);
@@ -233,6 +253,16 @@ class GardenCityGame {
     this.weapons.onMeleeSwing = () => {
       this.audio.playMeleeSwing();
       this.player.triggerMeleeAnimation();
+    };
+
+    this.weapons.onWeaponDrawn = (def) => {
+      this.player.triggerWeaponDraw();
+      this.audio.playWeaponDraw();
+      gameBus.emit('weapon:drawn', { weaponId: def.id, name: def.name });
+    };
+
+    this.weapons.onWeaponHolstered = (def) => {
+      gameBus.emit('weapon:holstered', { weaponId: def.id });
     };
 
     this.weapons.onHitConfirmed = (hs) => {
@@ -351,6 +381,36 @@ class GardenCityGame {
       this.shopMetroUI.showSubtitle(spk, en, kn, hi, 6.0);
     };
 
+    // Phase A 8-Chapter Campaign hooks plugged cleanly into MissionSystem & EventBus
+    this.campaign.onLaunchMission = (m) => {
+      this.missions.startMission(m);
+    };
+    this.campaign.onRewardEconomy = (cash, respect, reason) => {
+      if (cash !== 0) {
+        this.missions.cash += cash;
+        gameBus.emit('economy:cash', { delta: cash, total: this.missions.cash, reason });
+      }
+      if (respect !== 0) this.missions.respect += respect;
+      this.saveProgress();
+    };
+    this.campaign.onZoneClaimed = (zone) => {
+      this.missions.ownedZones.add(zone);
+      this.saveProgress();
+    };
+    this.campaign.onSyncUIBlock = () => this.syncUIBlockState();
+
+    this.missions.onMissionComplete = (m) => {
+      const { chapterCompleted, endingTriggered } = this.campaign.recordMissionComplete(m.id);
+      if (chapterCompleted) {
+        this.shopMetroUI.showToast(`🏆 ${chapterCompleted.title} COMPLETE! Zone Claimed!`, 4.2);
+      }
+      if (endingTriggered) {
+        setTimeout(() => this.campaign.triggerEnding(endingTriggered), 2600);
+      } else {
+        setTimeout(() => this.campaign.startNextCampaignStep(), 3200);
+      }
+    };
+
     this.cityMapUI.onFastTravel = (lat, lon, label) => {
       void this.fastTravelTo(lat, lon, label);
     };
@@ -404,8 +464,8 @@ class GardenCityGame {
     this.wardrobeUI.onLoadoutChange = (newLoadout) => {
       this.characterLoadout = newLoadout;
       saveCharacterLoadout(newLoadout);
-      const newMount = this.player.applyLoadout(newLoadout);
-      this.weapons.setMountGroup(newMount);
+      const mounts = this.player.applyLoadout(newLoadout);
+      this.weapons.setMountGroups(mounts.hand, mounts.pocket, mounts.back);
       this.vehicles.setPlayerLoadout(newLoadout);
       this.applyCharacterPerks(newLoadout);
     };
@@ -529,8 +589,72 @@ class GardenCityGame {
     }
   }
 
+  private initDebugPanel(): void {
+    this.debugPanel = new DebugPanel({
+      getStats: () => ({
+        fps: this.lastFps,
+        chunks: this.streamer.getLoadedChunkCount(),
+        npcs: this.enemies.units.length,
+        vehicles: this.vehicles.vehicles.length,
+        cash: this.missions.cash,
+        loyalty: this.campaign.loyalty,
+        power: this.campaign.power,
+        chapterLabel: this.campaign.getCurrentChapter().title,
+        holstered: this.weapons.isHolstered
+      }),
+      onGiveCash: (amt) => {
+        this.missions.cash += amt;
+        gameBus.emit('economy:cash', { delta: amt, total: this.missions.cash, reason: 'debug' });
+        this.shopMetroUI.showToast(`Debug: +₹${amt.toLocaleString()}`, 2.0);
+      },
+      onSpawnEnemies: () => {
+        const z = getZoneAtWorldPos(this.player.position.x, this.player.position.z).id;
+        for (let i = 0; i < 3; i++) {
+          const ang = (i / 3) * Math.PI * 2;
+          const pos = new THREE.Vector3(this.player.position.x + Math.cos(ang) * 18, 0, this.player.position.z + Math.sin(ang) * 18);
+          const u = this.enemies.spawnUnit('rival', i === 2 ? 'brute' : 'shooter', pos, z);
+          u.state = 'alert';
+        }
+        this.shopMetroUI.showToast('Debug: Spawned 3 armed rival crew members!', 2.0);
+      },
+      onTeleportZone: (zoneId) => {
+        const z = BENGALURU_ZONES.find((x) => x.id === zoneId);
+        if (z) {
+          gameBus.emit('debug:teleport', { zone: zoneId });
+          void this.fastTravelTo(z.centerLat, z.centerLon, z.name);
+        }
+      },
+      onTriggerDialogueTest: () => {
+        this.debugPanel.toggle(false);
+        this.campaign.openCurrentChapterDialogue();
+      },
+      onTriggerCutsceneTest: () => {
+        this.debugPanel.toggle(false);
+        this.campaign.playCurrentChapterCutscene();
+      },
+      onCompleteMission: () => {
+        this.missions.forceCompleteActive();
+      },
+      onTriggerEnding: (ending) => {
+        this.debugPanel.toggle(false);
+        this.campaign.triggerEnding(ending);
+      },
+      onToggle: () => this.syncUIBlockState()
+    });
+  }
+
   private syncUIBlockState(): void {
-    const anyModal = this.paused || this.cityMapUI.isOpen || this.shopMetroUI.metroOpen || this.shopMetroUI.shopOpen || this.weaponUI.isOpen || this.wardrobeUI.isOpen;
+    const anyModal =
+      this.paused ||
+      this.cityMapUI.isOpen ||
+      this.shopMetroUI.metroOpen ||
+      this.shopMetroUI.shopOpen ||
+      this.weaponUI.isOpen ||
+      this.wardrobeUI.isOpen ||
+      this.dialogue.isOpen ||
+      this.campaign.isJournalOpen ||
+      this.cutscenes.isPlaying ||
+      this.debugPanel.isOpen;
     this.input.uiBlocked = anyModal;
     if (anyModal) {
       this.input.releasePointerLock();
@@ -547,14 +671,9 @@ class GardenCityGame {
       document.getElementById('title-screen')?.classList.add('hidden');
       document.getElementById('hud')?.classList.remove('hidden');
       this.canvas.focus();
+      // Start 8-Chapter Campaign (intro cutscene is skippable with [Space]; press [J] anytime for Story Journal!)
+      this.campaign.startNextCampaignStep();
       this.syncUIBlockState();
-      this.shopMetroUI.showSubtitle(
-        'GARDEN CITY UNDERWORLD',
-        'Welcome to Central Bengaluru! Hop in the green-yellow Auto-Rickshaw [E], check [Tab] Map, or press [M] for Namma Metro.',
-        'ಕೇಂದ್ರ ಬೆಂಗಳೂರಿಗೆ ಸ್ವಾಗತ! ಆಟೋ ಹತ್ತಲು [E], ನಕ್ಷೆಗೆ [Tab], ಅಥವಾ ನಮ್ಮ ಮೆಟ್ರೋಗೆ [M] ಒತ್ತಿ.',
-        'सेंट्रल बेंगलुरु में आपका स्वागत है! ऑटो के लिए [E], मैप के लिए [Tab], या नम्मा मेट्रो के लिए [M] दबाएं।',
-        7.0
-      );
     });
 
     document.getElementById('btn-title-vault')?.addEventListener('click', (e) => {
@@ -596,7 +715,9 @@ class GardenCityGame {
     });
 
     (document.getElementById('set-language') as HTMLSelectElement)?.addEventListener('change', (e) => {
-      this.shopMetroUI.subtitleLang = (e.target as HTMLSelectElement).value as SubtitleLang;
+      const lang = (e.target as HTMLSelectElement).value as SubtitleLang;
+      this.shopMetroUI.subtitleLang = lang;
+      this.campaign.setLanguage(lang);
     });
 
     (document.getElementById('set-weather') as HTMLSelectElement)?.addEventListener('change', (e) => {
@@ -649,6 +770,7 @@ class GardenCityGame {
     this.fpsAccum += dt;
     if (this.fpsAccum >= 0.5) {
       const fps = Math.round(this.fpsFrames / this.fpsAccum);
+      this.lastFps = fps;
       const el = document.getElementById('hud-fps');
       if (el) el.textContent = `${fps} FPS • ${this.streamer.getLoadedChunkCount()} tiles`;
       this.fpsFrames = 0;
@@ -847,7 +969,13 @@ class GardenCityGame {
 
     if (this.started) {
       if (input.pauseTogglePressed) {
-        if (this.wardrobeUI.isOpen) {
+        if (this.cutscenes.isPlaying) {
+          this.cutscenes.skip();
+        } else if (this.dialogue.isOpen) {
+          this.dialogue.close();
+        } else if (this.campaign.isJournalOpen) {
+          this.campaign.toggleJournal(false);
+        } else if (this.wardrobeUI.isOpen) {
           this.wardrobeUI.setOpen(false);
           this.syncUIBlockState();
         } else if (this.cityMapUI.isOpen) {
@@ -858,6 +986,10 @@ class GardenCityGame {
         } else {
           this.togglePause();
         }
+      }
+
+      if (input.storyTogglePressed && !this.paused && !this.cutscenes.isPlaying && !this.dialogue.isOpen) {
+        this.campaign.toggleJournal();
       }
 
       if (input.wardrobeTogglePressed && !this.paused) {
@@ -904,11 +1036,28 @@ class GardenCityGame {
       }
     }
 
-    if (this.wardrobeUI.isOpen) {
+    if (this.cutscenes.isPlaying) {
+      // Camera-driven skippable 3D Cutscene!
+      const focusPt = this.cutscenes.update(dt, this.camera);
+      if (focusPt) {
+        void this.streamer.ensureChunksAt(focusPt);
+        this.landmarks.ensureNear(focusPt);
+        this.env.update(dt, focusPt, 0);
+      }
+      this.metroTrains.update(dt, this.camera, 0);
+    } else if (this.wardrobeUI.isOpen) {
       // Live 3D Free Fire Lobby Turntable Showcase!
       this.player.updateVaultShowcase(dt, this.camera);
       this.env.update(dt, this.player.position, 0);
-    } else if (this.started && !this.paused && !this.cityMapUI.isOpen && !this.shopMetroUI.metroOpen && !this.shopMetroUI.shopOpen) {
+    } else if (
+      this.started &&
+      !this.paused &&
+      !this.dialogue.isOpen &&
+      !this.campaign.isJournalOpen &&
+      !this.cityMapUI.isOpen &&
+      !this.shopMetroUI.metroOpen &&
+      !this.shopMetroUI.shopOpen
+    ) {
       this.physics.step(dt);
 
       // Kaal "Cyber DJ" passive HP regen aura (+3 HP/s)
@@ -916,9 +1065,13 @@ class GardenCityGame {
         this.player.health = Math.min(this.player.maxHealth, this.player.health + dt * 3.0);
       }
 
-      // Weapon slot quick-keys 1-8 & Reload
+      // Weapon slot quick-keys 1-9/0/-/=, Manual Pocket Holster [U] & Reload
       if (input.weaponSlotPressed > 0 && !this.player.inVehicle) {
         this.weapons.equipBySlot(input.weaponSlotPressed);
+      }
+      if (input.holsterTogglePressed && !this.player.inVehicle) {
+        if (this.weapons.isHolstered) this.weapons.drawWeapon();
+        else this.weapons.holsterWeapon();
       }
       if (input.reloadPressed && !this.player.inVehicle) {
         this.weapons.startReload();
@@ -1013,15 +1166,21 @@ class GardenCityGame {
       }
       this.player.scopeActive = isScoped;
 
-      // Feed current weapon posture style (melee / pistol / twohand) & reload state to character rig
+      // Auto-draw firearm out of pocket if player starts aiming or scoping!
+      if (!this.player.inVehicle && isFirearm && this.weapons.isHolstered && (input.aim || isScoped)) {
+        this.weapons.drawWeapon();
+      }
+
+      // Feed current weapon posture style (melee / pistol / twohand), holster & reload state to character rig
       const wId = this.weapons.currentId;
       const isPistolStyle = wId === 'pistol' || wId === 'silenced_pistol' || wId === 'deagle' || wId === 'dual_uzi';
       this.player.equippedWeaponStyle = !isFirearm ? 'melee' : isPistolStyle ? 'pistol' : 'twohand';
+      this.player.isWeaponHolstered = this.weapons.isHolstered;
       this.player.isReloadingWeapon = this.weapons.reloading;
 
       this.player.isMeleeBlocking = !this.player.inVehicle && input.aim && !isFirearm;
       this.player.update(dt, input, this.camera);
-      this.weapons.update(dt);
+      this.weapons.update(dt, !this.player.inVehicle && (input.aim || input.fire || isScoped));
 
       const safeZone = this.streamer.getSafeZoneAt(this.player.position.x, this.player.position.z);
       const fwd = new THREE.Vector3(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw));
@@ -1163,6 +1322,7 @@ class GardenCityGame {
       );
 
       this.updateHUD(dt, promptText);
+      this.debugPanel.update(dt);
     } else if (!this.started) {
       // Cinematic dusk orbit over MG Road / Cubbon Park / Vidhana Soudha on Title Screen
       const t = performance.now() * 0.00018;

@@ -23,6 +23,8 @@ export interface ArticulatedCharacterRig {
   rightHip: THREE.Group;
   rightKnee: THREE.Group;
   weaponMount: THREE.Group;
+  pocketHolster: THREE.Group;
+  backHolster: THREE.Group;
   leftWing?: THREE.Group;
   rightWing?: THREE.Group;
   ribbonTail?: THREE.Group;
@@ -150,6 +152,18 @@ export function buildProtagonistCharacter(loadout: CharacterLoadout = DEFAULT_LO
   belt.scale.set(1.06, 1, 0.72);
   belt.position.y = 0.055;
   hips.add(belt);
+
+  // Visible tactical hip pocket / holster pouch on right hip (holds stowed sidearm!)
+  const pocketPouch = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.145, 0.11), darkMat);
+  pocketPouch.position.set(0.205, -0.055, 0.01);
+  pocketPouch.rotation.z = -0.1;
+  hips.add(pocketPouch);
+
+  const pocketHolster = new THREE.Group();
+  pocketHolster.position.set(0.215, -0.02, -0.01);
+  // Barrel points cleanly down into hip pocket with grip sticking up ready to draw!
+  pocketHolster.rotation.set(-Math.PI * 0.44, 0.12, -0.18);
+  hips.add(pocketHolster);
 
   // --- TORSO (Customizable Free Fire Dress / Jacket / Armor / Blazer / Hoodie) ---
   const torso = new THREE.Group();
@@ -325,6 +339,12 @@ export function buildProtagonistCharacter(loadout: CharacterLoadout = DEFAULT_LO
   const backHem = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.075, 0.12), hemMat);
   backHem.position.set(0, 0.055, 0.12);
   torso.add(backHem);
+
+  // Back sling mount for holstered long guns (SMG, Shotgun, Rifle, Sniper, LMG, Launcher)
+  const backHolster = new THREE.Group();
+  backHolster.position.set(0.06, 0.34, 0.195);
+  backHolster.rotation.set(0.32, Math.PI * 0.5, 0.55);
+  torso.add(backHolster);
 
   // Standing collar + lapels
   const collarBack = new THREE.Mesh(
@@ -530,6 +550,8 @@ export function buildProtagonistCharacter(loadout: CharacterLoadout = DEFAULT_LO
     rightHip: rightLeg.hip,
     rightKnee: rightLeg.knee,
     weaponMount: rightArm.handMount,
+    pocketHolster,
+    backHolster,
     leftWing,
     rightWing,
     ribbonTail

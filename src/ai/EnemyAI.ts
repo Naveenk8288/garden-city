@@ -393,12 +393,11 @@ export class EnemyAIManager {
             u.stateTimer = 3.2;
           } else if (u.state === 'chase') {
             if (u.archetype === 'grunt') {
-              speed = 5.9;
-              moveVec.copy(dirToPlayer);
-              if (horizDist < 2.2) {
-                moveVec.set(0, 0, 0);
-                this.tryEnemyAttack(u, playerPos, horizDist, true);
-              }
+              speed = 5.4;
+              if (horizDist > 16) moveVec.copy(dirToPlayer);
+              else if (horizDist < 7) moveVec.copy(dirToPlayer).negate();
+              // Street grunts fire their 9mm pistols at range AND melee if right up close!
+              this.tryEnemyAttack(u, playerPos, horizDist, horizDist < 2.5);
             } else {
               speed = u.archetype === 'brute' ? 3.8 : 4.9;
               if (horizDist > 24) moveVec.copy(dirToPlayer);
@@ -487,11 +486,12 @@ export class EnemyAIManager {
       u.rig.headGroup.rotation.x = u.hitHeadshot ? -flinch * 0.75 : -flinch * 0.25;
 
       if (u.state !== 'patrol' && u.state !== 'retreat' && u.faction !== 'civilian') {
-        u.rig.rightShoulder.rotation.x = 1.32 - flinch * 0.6;
-        u.rig.leftShoulder.rotation.x = 0.85;
+        // Two-handed aiming posture holding real 3D gun toward the player!
+        u.rig.rightShoulder.rotation.set(1.48 - flinch * 0.5, 0, -0.22);
+        u.rig.leftShoulder.rotation.set(1.22, 0, 0.48);
       } else {
-        u.rig.rightShoulder.rotation.x = -stride * 0.55;
-        u.rig.leftShoulder.rotation.x = stride * 0.55;
+        u.rig.rightShoulder.rotation.set(-stride * 0.55, 0, 0);
+        u.rig.leftShoulder.rotation.set(stride * 0.55, 0, 0);
       }
 
       u.mesh.position.copy(u.position);
@@ -512,9 +512,16 @@ export class EnemyAIManager {
     }
 
     if (dist > 58) return;
-    u.fireCooldown = u.archetype === 'boss' ? 0.52 : u.archetype === 'brute' ? 1.15 : 0.95;
+    u.fireCooldown = u.archetype === 'boss' ? 0.52 : u.archetype === 'brute' ? 1.15 : u.archetype === 'grunt' ? 1.25 : 0.95;
 
-    const muzzle = u.position.clone().add(new THREE.Vector3(0, 1.38, 0));
+    // Emit muzzle flash & tracer directly from the real 3D gun barrel tip!
+    u.mesh.updateMatrixWorld(true);
+    const muzzle = new THREE.Vector3();
+    if (u.rig.hasGun) {
+      u.rig.muzzleTip.getWorldPosition(muzzle);
+    } else {
+      muzzle.copy(u.position).add(new THREE.Vector3(0, 1.38, 0));
+    }
     const targetPt = playerPos.clone().add(new THREE.Vector3(0, 1.15, 0));
     const aimDir = targetPt.clone().sub(muzzle).normalize();
 

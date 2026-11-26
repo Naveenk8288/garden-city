@@ -211,6 +211,8 @@ export class MissionSystem {
 
   public onNotify?: (msg: string) => void;
   public onSubtitle?: (speaker: string, en: string, kn: string, hi: string) => void;
+  public onMissionComplete?: (mission: MissionDef) => void;
+  public useExternalCampaign = true;
 
   constructor(
     scene: THREE.Scene,
@@ -237,7 +239,9 @@ export class MissionSystem {
     this.beaconMesh.visible = false;
     this.scene.add(this.beaconMesh);
 
-    this.startNextMission();
+    if (!this.useExternalCampaign) {
+      this.startNextMission();
+    }
   }
 
   public startNextMission(): void {
@@ -288,6 +292,12 @@ export class MissionSystem {
     }
   }
 
+  public forceCompleteActive(): void {
+    if (this.activeMission) {
+      this.completeActiveMission();
+    }
+  }
+
   private completeActiveMission(): void {
     const m = this.activeMission;
     if (!m) return;
@@ -296,13 +306,17 @@ export class MissionSystem {
     this.cash += m.rewardCash;
     this.respect += m.rewardRespect;
     this.enemies.clearMissionUnits(m.id);
+    this.beaconMesh.visible = false;
 
     const zDef = BENGALURU_ZONES.find((z) => z.id === m.zone);
-    this.onNotify?.(`MISSION COMPLETE: ${m.title}! +₹${m.rewardCash.toLocaleString()} • +${m.rewardRespect} Respect • ${zDef?.name || m.zone} Claimed!`);
+    this.onNotify?.(`MISSION COMPLETE: ${m.title}! +₹${m.rewardCash.toLocaleString()} • +${m.rewardRespect} Respect • ${zDef?.name || m.zone}`);
+    this.onMissionComplete?.(m);
 
-    setTimeout(() => {
-      this.startNextMission();
-    }, 3200);
+    if (!this.useExternalCampaign) {
+      setTimeout(() => {
+        this.startNextMission();
+      }, 3200);
+    }
   }
 
   public update(dt: number, playerPos: THREE.Vector3): void {

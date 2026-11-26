@@ -91,18 +91,26 @@ export class WeaponSystem {
   public reloading = false;
   public reloadTimer = 0;
   public comboStep = 0;
+  public isHolstered = true;
+  private idleHolsterTimer = 0;
+  private drawPendingSwapTimer = 0;
   private comboResetTimer = 0;
   private fireCooldown = 0;
   public reloadSpeedMult = 1.0;
   public headshotDamageMult = 1.0;
   private mountGroup: THREE.Group;
+  private pocketMount: THREE.Group | null = null;
+  private backMount: THREE.Group | null = null;
   private currentModel: THREE.Group | null = null;
+  private pocketDummyPistol: THREE.Group | null = null;
   private muzzleTip: THREE.Object3D;
   private physics: PhysicsWorld;
   private vfx: VFXSystem;
 
   public onShotFired?: (weapon: WeaponDef, pos: THREE.Vector3) => void;
   public onMeleeSwing?: (weapon: WeaponDef, comboStep: number) => void;
+  public onWeaponDrawn?: (weapon: WeaponDef) => void;
+  public onWeaponHolstered?: (weapon: WeaponDef) => void;
   public onHitConfirmed?: (isHeadshot: boolean) => void;
   public onHitDetails?: (info: {
     target: CombatHitTarget;
@@ -114,8 +122,16 @@ export class WeaponSystem {
   public onSafeZoneBlocked?: () => void;
   public onExplosion?: (pos: THREE.Vector3) => void;
 
-  constructor(mountGroup: THREE.Group, physics: PhysicsWorld, vfx: VFXSystem) {
+  constructor(
+    mountGroup: THREE.Group,
+    physics: PhysicsWorld,
+    vfx: VFXSystem,
+    pocketMount?: THREE.Group,
+    backMount?: THREE.Group
+  ) {
     this.mountGroup = mountGroup;
+    this.pocketMount = pocketMount || null;
+    this.backMount = backMount || null;
     this.physics = physics;
     this.vfx = vfx;
     this.muzzleTip = new THREE.Object3D();
@@ -129,15 +145,95 @@ export class WeaponSystem {
         reserve: startsUnlocked ? Math.floor(def.reserveMax * 0.65) : 0
       });
     }
-    this.equip('pistol');
+    this.isHolstered = true;
+    this.currentId = 'pistol';
+    this.rebuildModel();
+    this.attachModelToActiveMount();
+  }
+
+  public setMountGroups(handMount: THREE.Group, pocketMount?: THREE.Group, backMount?: THREE.Group): void {
+    if (this.currentModel && this.currentModel.parent) {
+      this.currentModel.parent.remove(this.currentModel);
+    }
+    if (this.pocketDummyPistol && this.pocketDummyPistol.parent) {
+      this.pocketDummyPistol.parent.remove(this.pocketDummyPistol);
+    }
+    this.mountGroup.remove(this.muzzleTip);
+    this.mountGroup = handMount;
+    if (pocketMount) this.pocketMount = pocketMount;
+    if (backMount) this.backMount = backMount;
+    this.mountGroup.add(this.muzzleTip);
+    this.attachModelToActiveMount();
   }
 
   public setMountGroup(newMount: THREE.Group): void {
-    if (this.currentModel) this.mountGroup.remove(this.currentModel);
-    this.mountGroup.remove(this.muzzleTip);
-    this.mountGroup = newMount;
-    this.mountGroup.add(this.muzzleTip);
-    if (this.currentModel) this.mountGroup.add(this.currentModel);
+    this.setMountGroups(newMount);
+  }
+
+  private isPocketSidearm(id: WeaponId): boolean {
+    return id === 'pistol' || id === 'silenced_pistol' || id === 'deagle' || id === 'dual_uzi';
+  }
+
+  private attachModelToActiveMount(): void {
+    if (!this.currentModel) return;
+    if (this.currentModel.parent) this.currentModel.parent.remove(this.currentModel);
+    if (this.pocketDummyPistol && this.pocketDummyPistol.parent) {
+      this.pocketDummyPistol.parent.remove(this.pocketDummyPistol);
+    }
+
+    const def = this.getCurrentDef();
+    if (def.category === 'firearm' && this.isHolstered) {
+      const holster = this.isPocketSidearm(def.id) ? this.pocketMount : (this.backMount || this.pocketMount);
+      if (holster) {
+        holster.add(this.currentModel);
+      } else {
+        this.mountGroup.add(this.currentModel);
+      }
+    } else {
+      this.mountGroup.add(this.currentModel);
+      // Even when using fists/melee or carrying a long gun, keep a sidearm visibly tucked in right pocket!
+      if ((def.category === 'melee' || !this.isPocketSidearm(def.id)) && this.pocketMount) {
+        if (!this.pocketDummyPistol) {
+          this.pocketDummyPistol = this.buildPocketSidearmMesh();
+        }
+        this.pocketMount.add(this.pocketDummyPistol);
+      }
+    }
+  }
+
+  private buildPocketSidearmMesh(): THREE.Group {
+    const g = new THREE.Group();
+    const gunMetal = new THREE.MeshStandardMaterial({ color: 0x1d2129, roughness: 0.3, metalness: 0.85 });
+    const mattePolymer = new THREE.MeshStandardMaterial({ color: 0x15181e, roughness: 0.72, metalness: 0.18 });
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.052, 0.22), gunMetal);
+    slide.position.set(0, 0.04, -0.08);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.12, 0.06), mattePolymer);
+    grip.position.set(0, -0.05, 0.01);
+    grip.rotation.x = 0.18;
+    g.add(slide, grip);
+    return g;
+  }
+
+  /** Pulls gun out of pocket/holster into player's shooting hand with draw animation! */
+  public drawWeapon(): boolean {
+    const def = this.getCurrentDef();
+    if (def.category !== 'firearm') return false;
+    this.idleHolsterTimer = 10.0;
+    if (!this.isHolstered) return false;
+    this.isHolstered = false;
+    this.drawPendingSwapTimer = 0.13; // Swaps from pocket into right hand mid-draw!
+    this.onWeaponDrawn?.(def);
+    return true;
+  }
+
+  /** Stows firearm neatly back into hip pocket / back sling */
+  public holsterWeapon(): void {
+    const def = this.getCurrentDef();
+    if (def.category !== 'firearm' || this.isHolstered) return;
+    this.isHolstered = true;
+    this.drawPendingSwapTimer = 0;
+    this.attachModelToActiveMount();
+    this.onWeaponHolstered?.(def);
   }
 
   public getCurrentDef(): WeaponDef {
@@ -167,10 +263,34 @@ export class WeaponSystem {
   public equip(id: WeaponId): boolean {
     const st = this.states.get(id);
     if (!st || !st.unlocked) return false;
+    const prevId = this.currentId;
+    const def = WEAPON_DEFS.find((w) => w.id === id)!;
     this.currentId = id;
     this.reloading = false;
     this.reloadTimer = 0;
     this.rebuildModel();
+
+    if (def.category === 'firearm') {
+      // Choosing a gun automatically takes it out of your pocket ready to shoot!
+      const wasHolstered = this.isHolstered || prevId !== id;
+      this.isHolstered = false;
+      this.idleHolsterTimer = 10.0;
+      if (wasHolstered) {
+        // Brief reach-to-pocket before snapping into hand
+        this.isHolstered = true;
+        this.attachModelToActiveMount();
+        this.isHolstered = false;
+        this.drawPendingSwapTimer = 0.13;
+        this.onWeaponDrawn?.(def);
+      } else {
+        this.attachModelToActiveMount();
+      }
+    } else {
+      // Choosing melee/fists keeps your sidearm tucked visibly in your right hip pocket!
+      this.isHolstered = true;
+      this.drawPendingSwapTimer = 0;
+      this.attachModelToActiveMount();
+    }
     return true;
   }
 
@@ -398,8 +518,11 @@ export class WeaponSystem {
     }
 
     this.muzzleTip.position.set(0, 0.05, muzzleZ);
+    if (this.currentModel && this.currentModel.parent) {
+      this.currentModel.parent.remove(this.currentModel);
+    }
     this.currentModel = g;
-    this.mountGroup.add(g);
+    this.attachModelToActiveMount();
   }
 
   public startReload(): void {
@@ -411,11 +534,30 @@ export class WeaponSystem {
     this.reloadTimer = def.reloadTime / Math.max(0.5, this.reloadSpeedMult);
   }
 
-  public update(dt: number): void {
+  public update(dt: number, isCombatActive = false): void {
     if (this.fireCooldown > 0) this.fireCooldown -= dt;
     if (this.comboResetTimer > 0) {
       this.comboResetTimer -= dt;
       if (this.comboResetTimer <= 0) this.comboStep = 0;
+    }
+
+    if (this.drawPendingSwapTimer > 0) {
+      this.drawPendingSwapTimer -= dt;
+      if (this.drawPendingSwapTimer <= 0) {
+        this.attachModelToActiveMount();
+      }
+    }
+
+    const curDef = this.getCurrentDef();
+    if (curDef.category === 'firearm' && !this.isHolstered) {
+      if (isCombatActive || this.reloading) {
+        this.idleHolsterTimer = 10.0;
+      } else {
+        this.idleHolsterTimer -= dt;
+        if (this.idleHolsterTimer <= 0) {
+          this.holsterWeapon();
+        }
+      }
     }
 
     if (this.reloading) {
@@ -584,7 +726,16 @@ export class WeaponSystem {
       return { fired: true, recoilPitch: 0, recoilYaw: 0, melee: true };
     }
 
-    // Firearm
+    // Firearm — auto-draw out of pocket if player starts firing!
+    if (this.isHolstered || this.drawPendingSwapTimer > 0) {
+      if (this.isHolstered) {
+        this.drawWeapon();
+      }
+      this.drawPendingSwapTimer = 0;
+      this.attachModelToActiveMount();
+    }
+    this.idleHolsterTimer = 10.0;
+
     const st = this.getCurrentState();
     if (st.mag <= 0) {
       this.startReload();

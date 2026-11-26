@@ -231,6 +231,30 @@ export class AudioEngine {
     osc.stop(t + 0.13);
   }
 
+  public playWeaponDraw(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Crisp metallic slide rack & holster draw click-clack
+    for (const [off, hz] of [[0, 1250], [0.075, 1780]]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(hz, t + off);
+      osc.frequency.exponentialRampToValueAtTime(hz * 0.55, t + off + 0.045);
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.value = hz * 1.1;
+      filt.Q.value = 3.0;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.09, t + off);
+      g.gain.exponentialRampToValueAtTime(0.0008, t + off + 0.05);
+      osc.connect(filt);
+      filt.connect(g);
+      g.connect(this.masterGain);
+      osc.start(t + off);
+      osc.stop(t + off + 0.055);
+    }
+  }
+
   public playHitMarker(headshot: boolean): void {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

@@ -53,6 +53,8 @@ export class PlayerController {
 
   public mesh: THREE.Group;
   public weaponMount: THREE.Group;
+  public pocketHolster: THREE.Group;
+  public backHolster: THREE.Group;
   private rig: ArticulatedCharacterRig;
   private scene: THREE.Scene;
 
@@ -72,9 +74,11 @@ export class PlayerController {
   private animPhase = 0;
   private meleeSwingTimer = 0;
   private grabTimer = 0;
+  private drawTimer = 0;            // Reach-to-pocket weapon draw animation timer!
   private combatHoldTimer = 0;      // Keeps realistic two-handed shooting stance raised while/after shooting!
   private armRecoilKick = 0;        // Physical gun + wrist recoil kickback on every shot!
   public equippedWeaponStyle: 'melee' | 'pistol' | 'twohand' = 'pistol';
+  public isWeaponHolstered = true;
   public isReloadingWeapon = false;
   public aimTargetWorldPoint: THREE.Vector3 | null = null;
   public isMeleeBlocking = false;
@@ -106,18 +110,27 @@ export class PlayerController {
     this.rig = buildProtagonistCharacter(initialLoadout);
     this.mesh = this.rig.root;
     this.weaponMount = this.rig.weaponMount;
+    this.pocketHolster = this.rig.pocketHolster;
+    this.backHolster = this.rig.backHolster;
     this.mesh.position.copy(this.position);
     scene.add(this.mesh);
     this.camPos.copy(spawnPos).add(new THREE.Vector3(0, 2.5, 5));
   }
 
-  public applyLoadout(loadout: CharacterLoadout): THREE.Group {
+  public triggerWeaponDraw(): void {
+    this.drawTimer = 0.34;
+    this.combatHoldTimer = Math.max(this.combatHoldTimer, 1.4);
+  }
+
+  public applyLoadout(loadout: CharacterLoadout): { hand: THREE.Group; pocket: THREE.Group; back: THREE.Group } {
     const prevRotY = this.mesh.rotation.y;
     const prevVis = this.mesh.visible;
     this.scene.remove(this.mesh);
     this.rig = buildProtagonistCharacter(loadout);
     this.mesh = this.rig.root;
     this.weaponMount = this.rig.weaponMount;
+    this.pocketHolster = this.rig.pocketHolster;
+    this.backHolster = this.rig.backHolster;
     this.mesh.position.copy(this.position);
     this.mesh.rotation.y = prevRotY;
     this.mesh.visible = prevVis;
@@ -134,7 +147,7 @@ export class PlayerController {
     this.health = Math.min(this.maxHealth, Math.max(this.health, this.maxHealth * 0.85));
     this.armor = Math.min(this.maxArmor, this.armor);
 
-    return this.weaponMount;
+    return { hand: this.weaponMount, pocket: this.pocketHolster, back: this.backHolster };
   }
 
   private animateWingsAndRibbon(t: number, speedScale: number): void {
@@ -458,10 +471,12 @@ export class PlayerController {
 
     // Rotate character body: face directly toward the enemy / aim direction whenever aiming, scoping, OR firing!
     if (this.combatHoldTimer > 0) this.combatHoldTimer -= dt;
+    if (this.drawTimer > 0) this.drawTimer -= dt;
     this.armRecoilKick = Math.max(0, this.armRecoilKick - dt * 2.4);
 
     const isShootingStance =
       this.equippedWeaponStyle !== 'melee' &&
+      !this.isWeaponHolstered &&
       (input.aim || input.fire || this.scopeActive || this.combatHoldTimer > 0);
 
     if (isShootingStance) {
@@ -579,7 +594,27 @@ export class PlayerController {
     };
 
     // Articulated Shoulder + Elbow + Wrist Realistic Combat / Shooting / Reload / Carry Pose
-    if (this.grabTimer > 0) {
+    if (this.drawTimer > 0 && this.equippedWeaponStyle !== 'melee') {
+      // Smooth reach-to-right-pocket & draw firearm into shooting stance!
+      const p = 1 - this.drawTimer / 0.34; // 0..1
+      if (p < 0.45) {
+        // Reaching down to right hip pocket/holster
+        const k = p / 0.45;
+        lerpJoint(this.rig.rightShoulder, -0.25 * k, 0, -0.35 * k, 28);
+        lerpJoint(this.rig.rightElbow, 0.95 * k, 0, 0, 28);
+        lerpJoint(this.rig.rightWrist, 0, 0, 0, 28);
+        lerpJoint(this.rig.leftShoulder, 0.35 * k, 0, 0.25 * k, 24);
+        lerpJoint(this.rig.leftElbow, 0.65 * k, 0, 0, 24);
+      } else {
+        // Drawing gun up from pocket cleanly toward enemy target!
+        const k = (p - 0.45) / 0.55;
+        lerpJoint(this.rig.rightShoulder, -0.25 + k * 1.55, 0, -0.38, 28);
+        lerpJoint(this.rig.rightElbow, 0.95 - k * 0.72, 0, 0, 28);
+        lerpJoint(this.rig.rightWrist, 0, 0, 0, 24);
+        lerpJoint(this.rig.leftShoulder, 0.35 + k * 0.95, 0, 0.52, 24);
+        lerpJoint(this.rig.leftElbow, 0.65 - k * 0.4, 0, 0, 24);
+      }
+    } else if (this.grabTimer > 0) {
       this.grabTimer -= dt;
       const t = 1 - this.grabTimer / 0.34;
       const push = Math.sin(t * Math.PI);
@@ -644,8 +679,8 @@ export class PlayerController {
       const qMountComp = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
       const qWristLocal = qElbowWorld.invert().multiply(qDesiredWeapon).multiply(qMountComp);
       this.rig.rightWrist.quaternion.copy(qWristLocal);
-    } else if (this.equippedWeaponStyle !== 'melee') {
-      // Realistic Tactical Low-Ready Carry (holding firearm ready across body instead of swinging it backward!)
+    } else if (this.equippedWeaponStyle !== 'melee' && !this.isWeaponHolstered) {
+      // Realistic Tactical Low-Ready Carry (holding drawn firearm ready across body)
       const sway = isMoving ? s * 0.08 : 0;
       if (this.equippedWeaponStyle === 'pistol') {
         lerpJoint(this.rig.rightShoulder, 0.52 + sway, 0, -0.14, 14);

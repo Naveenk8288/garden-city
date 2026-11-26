@@ -193,6 +193,8 @@ export class WeaponUI {
         ammoEl.textContent = weapons.comboStep > 0 ? `MELEE • COMBO x${weapons.comboStep}` : 'MELEE';
       } else if (weapons.reloading) {
         ammoEl.textContent = 'RELOADING...';
+      } else if (weapons.isHolstered) {
+        ammoEl.textContent = `IN POCKET • ${st.mag} / ${st.reserve}`;
       } else {
         ammoEl.textContent = `${st.mag} / ${st.reserve}`;
       }

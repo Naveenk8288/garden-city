@@ -22,6 +22,8 @@ export interface InputState {
   pauseTogglePressed: boolean;
   cameraFlipPressed: boolean;
   wardrobeTogglePressed: boolean;
+  storyTogglePressed: boolean;
+  holsterTogglePressed: boolean;
   scopeTogglePressed: boolean;
   wheelDelta: number;
   weaponSlotPressed: number; // 0 = none, 1..8
@@ -219,6 +221,8 @@ export class InputManager {
       pauseTogglePressed: this.justPressed.has('Escape'),
       cameraFlipPressed: !this.uiBlocked && this.justPressed.has('KeyV'),
       wardrobeTogglePressed: this.justPressed.has('KeyK'),
+      storyTogglePressed: this.justPressed.has('KeyJ'),
+      holsterTogglePressed: !this.uiBlocked && this.justPressed.has('KeyU'),
       scopeTogglePressed: !this.uiBlocked && (this.justPressed.has('KeyZ') || this.mouseJustPressed.has(1)),
       wheelDelta: this.wheelDelta,
       weaponSlotPressed,
